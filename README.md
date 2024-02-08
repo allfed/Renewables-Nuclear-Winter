@@ -4,3 +4,5 @@ This repo was set up to analyze the nuclear winter climate model of [Coupe et al
 `scripts/Explore.ipynb` is currently the main notebook of this project, which queries the Coupe et al. data to make some useful figures. Start there; it contains useful explanations.
 
 Note that the Coupe et al. data must be manually downloaded and unzipped in the `data` directory. It can be downloaded [here](https://figshare.com/articles/dataset/WACCM4_150_Tg_US-Russia/7742735/2).
+
+The `data` directory now also contains a database of solar farms and wind farms, downloaded from `https://globalenergymonitor.org/`. This could be used in conjunction with the climate model data to estimate how much solar and wind power generation would change in a nuclear winter.
