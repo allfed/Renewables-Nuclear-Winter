@@ -1,10 +1,15 @@
-import xarray as xr
-import matplotlib.pyplot as plt
-import numpy as np
-import pandas as pd
+from concurrent.futures import ProcessPoolExecutor, as_completed
+
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 from cartopy.util import add_cyclic_point
+import dask
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import tqdm
+import xarray as xr
+
 
 plt.style.use(
     "https://raw.githubusercontent.com/allfed/ALLFED-matplotlib-style-sheet/main/ALLFED.mplstyle"
@@ -59,7 +64,7 @@ class GEM:
             .sort_values(ascending=False)
             .head(5)
         )
-    
+
     def plot_solar_farm_map(self):
         """
         Plot the location of solar farms on a map.
@@ -73,7 +78,7 @@ class GEM:
         ax.add_feature(cfeature.OCEAN)
         ax.add_feature(cfeature.COASTLINE, linewidth=0.5)
         ax.add_feature(cfeature.BORDERS, linestyle="-", linewidth=0.5)
-        #ax.gridlines(draw_labels=True, dms=True, x_inline=False, y_inline=False)
+        # ax.gridlines(draw_labels=True, dms=True, x_inline=False, y_inline=False)
         ax.scatter(
             self.solar_farms.Longitude,
             self.solar_farms.Latitude,
@@ -84,10 +89,94 @@ class GEM:
         )
         plt.show()
 
+    @staticmethod
+    def get_solar_flux_time_series(lat, lon):
+        """
+        Get the time series of solar flux at a given location. The solar flux is normalized by the
+        baseline solar flux at the same location, so that 1 is the baseline and 0 is no solar flux.
+        The baseline is the average solar flux for each month for the last year of the simulation
+        (year 16).
+
+        Args:
+            lat (float): latitude
+            lon (float): longitude
+
+        Returns:
+            np.array: time
+            np.array: series of solar flux (1 is the baseline, 0 is no solar flux)
+        """
+        year_base = 16
+        var = "FSDS"
+        time = []
+        series = []
+        baseline_values = {}
+        for month in range(1, 13):
+            ref_data = waccm.get(var, year_base, month).isel(time=0)
+            ref_data_value = ref_data.sel(lat=lat, lon=lon, method="nearest")
+            baseline_values[month] = ref_data_value
+        for year in range(1, 16):
+            for month in range(1, 13):
+                time.append(waccm.months_since_nw(year, month))
+                data = waccm.get(var, year, month).isel(time=0)
+                data_value = data.sel(lat=lat, lon=lon, method="nearest")
+                ref_data_value = baseline_values[month]
+                series.append(data_value / ref_data_value)
+        time = np.array(time)
+        series = np.array(series)
+        return time, series
+
+    def get_solar_flux_for_farm(self, row):
+        """
+        Helper function to compute the solar flux time series for a single solar farm.
+        This function will be called in parallel for each solar farm.
+        """
+        lat = row["Latitude"]
+        lon = row["Longitude"]
+        capacity = row["Capacity (MW)"]
+        time, series = self.get_solar_flux_time_series(lat, lon)
+        weighted_series = series * capacity
+        return weighted_series
+
+    def get_country_solar_power_time_series(self, country):
+        """
+        Average solar power variation compared to baseline for a given country.
+        We are averaging over the locations of all solar farms in the country,
+        weighted by their capacity.
+
+        Args:
+            country (str): country name
+
+        Returns:
+            np.array: time
+            np.array: country-aggregated series of solar power variation compared to baseline
+                (1 is the baseline, 0 is no solar power)
+        """
+        df = self.solar_farms[self.solar_farms.Country == country]
+        total_capacity = df["Capacity (MW)"].sum()
+        country_aggregated_series = np.zeros(180)
+
+        pbar = tqdm.tqdm(total=len(df))
+
+        with ProcessPoolExecutor() as executor:
+            futures = {
+                executor.submit(self.get_solar_flux_for_farm, row): row["Capacity (MW)"]
+                for _, row in df.iterrows()
+            }
+
+            for future in as_completed(futures):
+                weighted_series = future.result()
+                capacity = futures[future]
+                country_aggregated_series += weighted_series / total_capacity
+                pbar.update(1)
+        pbar.close()
+
+        time, _ = self.get_solar_flux_time_series(0, 0)
+        return time, country_aggregated_series
+
 
 class waccm:
     @staticmethod
-    def get(var, year, month):
+    def get(var, year, month, use_dask=False):
         """
         Get data for a given variable, year, and month.
 
@@ -97,6 +186,7 @@ class waccm:
             var (str): variable name
             year (int): year
             month (int): month
+            use_dask (bool): whether to use Dask for chunking
 
         Returns:
             xr.DataArray: data
@@ -105,7 +195,8 @@ class waccm:
         year = str(year).zfill(4)
         month = str(month).zfill(2)
         ds = xr.open_dataset(
-            f"../data/nw_ur_150_07_mini/nw_ur_150_07.cam.h0.{year}-{month}.nc"
+            f"../data/nw_ur_150_07_mini/nw_ur_150_07.cam.h0.{year}-{month}.nc",
+            chunks={} if use_dask else None,  # Use Dask for chunking if requested
         )
         return ds[var]
 
