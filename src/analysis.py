@@ -173,6 +173,48 @@ class GEM:
         time, _ = self.get_solar_flux_time_series(0, 0)
         return time, country_aggregated_series
 
+    def get_all_country_solar_power_time_series(
+        self, output_csv="../results/solar_power_by_country_nuclear_winter.csv"
+    ):
+        """
+        Calculates the average solar power variation compared to baseline for all countries.
+
+        Output is saved to a CSV file.
+
+        Args:
+            output_csv (str): path to the output CSV file
+        """
+        # Sort countries alphabetically
+        countries = sorted(self.solar_farms["Country"].unique())
+
+        # Check if the output file already exists to determine where to resume
+        try:
+            existing_df = pd.read_csv(output_csv)
+            completed_countries = existing_df.columns[1:]  # Exclude 'Time' column
+            countries_to_process = [
+                c for c in countries if c not in completed_countries
+            ]
+        except FileNotFoundError:
+            # If file does not exist, start from scratch
+            existing_df = None
+            countries_to_process = countries
+
+        # Process each country
+        for country in countries_to_process:
+            print(f"Processing {country}...")
+            time, series = self.get_country_solar_power_time_series(country)
+
+            # If this is the first country being processed, initialize DataFrame
+            if existing_df is None:
+                existing_df = pd.DataFrame(time, columns=["Time"])
+                existing_df[country] = series
+            else:
+                existing_df[country] = series
+
+            # Write (or overwrite) the CSV file with updated data
+            existing_df.to_csv(output_csv, index=False)
+            print(f"Saved {country} to {output_csv}")
+
 
 class waccm:
     @staticmethod
