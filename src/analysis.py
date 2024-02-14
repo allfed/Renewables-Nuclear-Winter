@@ -21,6 +21,7 @@ plt.style.use(
 class GEM:
     def __init__(self):
         self.solar_farms = self.load_solar_farms()
+        self.wind_farms = self.load_wind_farms()
 
     def load_solar_farms(self):
         """
@@ -50,6 +51,33 @@ class GEM:
             ["Country", "Latitude", "Longitude", "Capacity (MW)", "Status"]
         ]
 
+    def load_wind_farms(self):
+        """
+        Load wind farm data from Global Energy Monitor.
+
+        Only projects that are operating, announced, in construction, or in pre-construction are included.
+
+        Returns:
+            pd.DataFrame: wind farm data
+        """
+        file_path = "../data/global-energy-monitor/Global-Wind-Power-Tracker-December-2023.xlsx"
+        largescale = pd.read_excel(file_path, sheet_name=1)
+        smallscale = pd.read_excel(file_path, sheet_name=2)
+        combined_df = pd.concat(
+            [largescale, smallscale], ignore_index=True
+        )
+        # drop cancelled projects
+        combined_df = combined_df[combined_df["Status"] != "cancelled"]
+        # drop shelved projects
+        combined_df = combined_df[combined_df["Status"] != "shelved"]
+        # drop retired projects
+        combined_df = combined_df[combined_df["Status"] != "retired"]
+        # drop mothballed projects
+        combined_df = combined_df[combined_df["Status"] != "mothballed"]
+        return combined_df[
+            ["Country", "Latitude", "Longitude", "Capacity (MW)", "Status"]
+        ]
+
     def sum_operating_solar_farms_per_country(self):
         """
         Returns the total power operating capacity for the top 5 countries with solar farms.
@@ -61,6 +89,23 @@ class GEM:
         """
         return (
             self.solar_farms[self.solar_farms.Status == "operating"]
+            .groupby("Country")["Capacity (MW)"]
+            .sum()
+            .sort_values(ascending=False)
+            .head(5)
+        )
+    
+    def sum_operating_wind_farms_per_country(self):
+        """
+        Returns the total power operating capacity for the top 5 countries with wind farms.
+
+        Useful for validation.
+
+        Returns:
+            pd.Series: total power operating capacity for the top 5 countries with wind farms
+        """
+        return (
+            self.wind_farms[self.wind_farms.Status == "operating"]
             .groupby("Country")["Capacity (MW)"]
             .sum()
             .sort_values(ascending=False)
@@ -218,7 +263,7 @@ class GEM:
 
             # If this is the first country being processed, initialize DataFrame
             if existing_df is None:
-                existing_df = pd.DataFrame(time, columns=["Time"])
+                existing_df = pd.DataFrame(time, columns=["Months_after_NW"])
                 existing_df[country] = series
             else:
                 existing_df[country] = series
@@ -226,7 +271,7 @@ class GEM:
             # same with baseline
             if existing_df_baseline is None:
                 existing_df_baseline = pd.DataFrame(
-                    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], columns=["Time"]
+                    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], columns=["Month_of_the_year"]
                 )
                 existing_df_baseline[country] = baseline
             else:
@@ -238,6 +283,30 @@ class GEM:
             
             existing_df_baseline.to_csv(output_csv2, index=False)
             print(f"Saved {country} to {output_csv2}")
+
+        @staticmethod
+        def wind_power_output(v, v_cut_in=3, v_rated=15, v_cut_out=25, P_rated=1):
+            """
+            Calculate the wind turbine power output given a wind speed.
+
+            Parameters:
+            - v (float): Wind speed in meters per second (m/s).
+            - v_cut_in (float): Cut-in wind speed (m/s). Default is 3 m/s.
+            - v_rated (float): Rated wind speed (m/s). Default is 15 m/s.
+            - v_cut_out (float): Cut-out wind speed (m/s). Default is 25 m/s.
+            - P_rated (float): Max power.
+
+            Returns:
+            - float: Power output (kW).
+            """
+            if v < v_cut_in or v > v_cut_out:
+                return 0
+            elif v_cut_in <= v < v_rated:
+                return P_rated * ((v - v_cut_in) / (v_rated - v_cut_in))**3
+            elif v_rated <= v <= v_cut_out:
+                return P_rated
+            else:
+                return 0 
 
 class waccm:
     """
