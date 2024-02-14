@@ -106,6 +106,7 @@ class GEM:
         Returns:
             np.array: time
             np.array: series of solar flux (1 is the baseline, 0 is no solar flux)
+            np.array: baseline values for each month
         """
         year_base = 16
         var = "FSDS"
@@ -125,7 +126,9 @@ class GEM:
                 series.append(data_value / ref_data_value)
         time = np.array(time)
         series = np.array(series)
-        return time, series
+        baseline = np.array(list(baseline_values.values()))
+        baseline = baseline / baseline.sum()
+        return time, series, baseline
 
     def get_solar_flux_for_farm(self, row):
         """
@@ -135,9 +138,10 @@ class GEM:
         lat = row["Latitude"]
         lon = row["Longitude"]
         capacity = row["Capacity (MW)"]
-        time, series = self.get_solar_flux_time_series(lat, lon)
+        time, series, baseline = self.get_solar_flux_time_series(lat, lon)
         weighted_series = series * capacity
-        return weighted_series
+        weighted_baseline = baseline * capacity
+        return weighted_series, weighted_baseline
 
     def get_country_solar_power_time_series(self, country):
         """
@@ -156,6 +160,7 @@ class GEM:
         df = self.solar_farms[self.solar_farms.Country == country]
         total_capacity = df["Capacity (MW)"].sum()
         country_aggregated_series = np.zeros(180)
+        country_aggregated_baseline = np.zeros(12)
 
         pbar = tqdm.tqdm(total=len(df))
 
@@ -166,17 +171,19 @@ class GEM:
             }
 
             for future in as_completed(futures):
-                weighted_series = future.result()
-                capacity = futures[future]
+                weighted_series, weighted_baseline = future.result()
                 country_aggregated_series += weighted_series / total_capacity
+                country_aggregated_baseline += weighted_baseline / total_capacity
                 pbar.update(1)
         pbar.close()
 
-        time, _ = self.get_solar_flux_time_series(0, 0)
-        return time, country_aggregated_series
+        time, _, _ = self.get_solar_flux_time_series(0, 0)
+        return time, country_aggregated_series, country_aggregated_baseline
 
     def get_all_country_solar_power_time_series(
-        self, output_csv="../results/solar_power_by_country_nuclear_winter.csv"
+        self,
+        output_csv1="../results/fraction_of_solar_power_countries.csv",
+        output_csv2="../results/baseline_seasonality_solar_power_countries.csv",
     ):
         """
         Calculates the average solar power variation compared to baseline for all countries.
@@ -184,14 +191,16 @@ class GEM:
         Output is saved to a CSV file.
 
         Args:
-            output_csv (str): path to the output CSV file
+            output_csv1 (str): path to the output CSV file for the solar power variation
+            output_csv2 (str): path to the output CSV file for the baseline seasonality
         """
         # Sort countries alphabetically
         countries = sorted(self.solar_farms["Country"].unique())
 
         # Check if the output file already exists to determine where to resume
         try:
-            existing_df = pd.read_csv(output_csv)
+            existing_df = pd.read_csv(output_csv1)
+            existing_df_baseline = pd.read_csv(output_csv2)
             completed_countries = existing_df.columns[1:]  # Exclude 'Time' column
             countries_to_process = [
                 c for c in countries if c not in completed_countries
@@ -199,12 +208,13 @@ class GEM:
         except FileNotFoundError:
             # If file does not exist, start from scratch
             existing_df = None
+            existing_df_baseline = None
             countries_to_process = countries
 
         # Process each country
         for country in countries_to_process:
             print(f"Processing {country}...")
-            time, series = self.get_country_solar_power_time_series(country)
+            time, series, baseline = self.get_country_solar_power_time_series(country)
 
             # If this is the first country being processed, initialize DataFrame
             if existing_df is None:
@@ -213,10 +223,21 @@ class GEM:
             else:
                 existing_df[country] = series
 
-            # Write (or overwrite) the CSV file with updated data
-            existing_df.to_csv(output_csv, index=False)
-            print(f"Saved {country} to {output_csv}")
+            # same with baseline
+            if existing_df_baseline is None:
+                existing_df_baseline = pd.DataFrame(
+                    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], columns=["Time"]
+                )
+                existing_df_baseline[country] = baseline
+            else:
+                existing_df_baseline[country] = baseline
 
+            # Write (or overwrite) the CSV file with updated data
+            existing_df.to_csv(output_csv1, index=False)
+            print(f"Saved {country} to {output_csv1}")
+            
+            existing_df_baseline.to_csv(output_csv2, index=False)
+            print(f"Saved {country} to {output_csv2}")
 
 class waccm:
     """
@@ -860,7 +881,11 @@ class waccmdaily:
 
             # Adjust colorbar to match the plot height
             cbar = plt.colorbar(
-                cf, ax=ax, shrink=0.7, orientation="vertical", label=waccmdaily.label(var)
+                cf,
+                ax=ax,
+                shrink=0.7,
+                orientation="vertical",
+                label=waccmdaily.label(var),
             )
 
             plt.tight_layout()
