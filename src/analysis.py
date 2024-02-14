@@ -6,6 +6,7 @@ import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 from cartopy.util import add_cyclic_point
 import dask
+import geopandas as gpd
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -385,12 +386,84 @@ class GEM:
 
         # make figure
         fig, ax = plt.subplots(figsize=(10, 5))
-        ax.plot(df.index/12, weighted_mean)
+        ax.plot(df.index / 12, weighted_mean)
         ax.set_xlabel("Years after nuclear war")
         ax.set_ylabel("Solar power compared to baseline")
         plt.show()
-        return 
+        return
 
+    def postprocess_solar_map(self, fraction_csv_file, baseline_csv_file, zmin=None, zmax=None):
+        """
+        Makes a map of solar power reduction over the year in each country.
+
+        Seasonality is taken into consideration when calculating the reduction over the year.
+
+        Args:
+            fraction_csv_file (str): path to the CSV file with the fraction of solar power
+            baseline_csv_file (str): path to the CSV file with the baseline seasonality
+            zmin (float): minimum value for the color scale
+            zmax (float): maximum value for the color scale
+
+        Returns:
+            None, but displays a plot
+        """
+        for year in range(1, 15):
+            fraction_csv = pd.read_csv(fraction_csv_file)
+            fraction_csv = fraction_csv.loc[year * 12 : (year + 1) * 12 - 1]
+            baseline_csv = pd.read_csv(baseline_csv_file)
+
+            country_dict = {}
+
+            # loop over countries:
+            for col in fraction_csv.columns:
+                if col != "Months_after_NW":
+                    fraction = fraction_csv[col].to_numpy()
+                    baseline = baseline_csv[col].to_numpy()
+                    reduction = np.dot(fraction, baseline)
+                    country_dict[col] = reduction * 100
+
+            name_mapping = {
+                "United States": "United States of America",
+                "DR Congo": "Dem. Rep. Congo",
+                "Republic of the Congo": "Congo",
+                "Dominican Republic": "Dominican Rep.",
+                "Türkiye": "Turkey",
+                "South Sudan": "S. Sudan",
+                "Central African Republic": "Central African Rep.",
+                "Czech Republic": "Czechia",
+                "Bosnia and Herzegovina": "Bosnia and Herz.",
+            }
+            country_dict = {name_mapping.get(k, k): v for k, v in country_dict.items()}
+
+            world = gpd.read_file(gpd.datasets.get_path("naturalearth_lowres"))
+            world["solar_reduction"] = world["name"].map(country_dict)
+            fig, ax = plt.subplots(1, 1, figsize=(15, 10))
+            world.boundary.plot(ax=ax, linewidth=0.5, color="k")
+            world.dropna(subset=["solar_reduction"]).plot(
+                column="solar_reduction",
+                ax=ax,
+                legend=True,
+                legend_kwds={
+                    "label": "Solar power compared to baseline (%)",
+                    "orientation": "vertical",
+                    "shrink": 0.5,
+                },
+                cmap="viridis",
+                vmin=zmin,  
+                vmax=zmax,  
+            )
+            world[world["solar_reduction"].isna()].plot(ax=ax, color="lightgrey")
+
+            ax.set_axis_off()
+            ax.grid(False)
+            plt.title(f"Year {year} after nuclear war")
+
+            plt.savefig(f"../results/solar_reduction_map_{year:02}.pdf", dpi=300)
+
+        os.system(  
+            "pdfunite ../results/solar_reduction_map_*.pdf ../results/solar_reduction_map.pdf"
+        )
+        os.system("rm ../results/solar_reduction_map_*.pdf")
 
 class waccm:
     """
