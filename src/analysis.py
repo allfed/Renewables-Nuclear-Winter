@@ -1,4 +1,6 @@
 from concurrent.futures import ProcessPoolExecutor, as_completed
+import os
+import re
 
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
@@ -217,6 +219,14 @@ class GEM:
 
 
 class waccm:
+    """
+    Used to access, process, and visualize simulation data produced by the Coupe et al. 2019
+    nuclear winter simulation using the Whole Atmosphere Community Climate Model (WACCM).
+
+    This is for the publicly available dataset, which has a monthly resolution and does not include
+    wind data.
+    """
+
     @staticmethod
     def get(var, year, month, use_dask=False):
         """
@@ -651,3 +661,207 @@ class waccm:
         formatted_lon = f"{abs(lon)}°{lon_hemi}"
 
         return f"{formatted_lat}, {formatted_lon}"
+
+
+class waccmdaily:
+    """
+    Used to access, process, and visualize simulation data produced by the Coupe et al. 2019
+    nuclear winter simulation using the Whole Atmosphere Community Climate Model (WACCM).
+
+    This is for a version of the dataset that is not publicly available, which has a daily
+    resolution and includes wind data.
+    """
+
+    wind_speed_cache = {}
+
+    @staticmethod
+    def calculate_and_cache_wind_speed(year, ds):
+        """Calculate and cache the wind speed for a given year if not already cached."""
+        cache_key = f"windspeed_{year}"
+        if cache_key not in waccmdaily.wind_speed_cache:
+            u = ds["a2x3h_Sa_u"]
+            v = ds["a2x3h_Sa_v"]
+            wind_speed = np.sqrt(u**2 + v**2)
+            waccmdaily.wind_speed_cache[cache_key] = wind_speed
+        return waccmdaily.wind_speed_cache[cache_key]
+
+    @staticmethod
+    def get(variable, time):
+        """
+        Retrieve data for a specific variable at a given time from an xarray dataset,
+        loading the dataset from a file based on the year in the time argument.
+
+        Args:
+        variable (str): the name of the variable to retrieve
+        time (str): the time specification, which can be a specific time, a specific day, or a specific month
+            nuclear winter starts in May of year 1 (which is actually year 5 in the dataset)
+
+        Returns:
+        xarray.DataArray or None: The requested data or None if the operation cannot be completed
+        """
+        if not waccmdaily.verify_time_format(time):
+            print(
+                f"Invalid time format: {time}. Expected formats are 'YY-MM-DDTHH:MM:SS', 'YY-MM-DD', or 'YY-MM'."
+            )
+            return None
+
+        # adjust year by adding 4 to YY in time
+        original_year = int(time[:2])
+        year = original_year + 4
+        year = str(year).zfill(2)
+        full_time_str = (
+            f"{year}{time[2:]}"  # Reconstruct the full time string with adjusted year
+        )
+        file_path = os.path.join("..", "data", "daily", f"year{year}.nc")
+
+        try:
+            ds = xr.open_dataset(file_path)
+
+            # For windspeed, check if it's already calculated and cached for the year
+            if variable == "windspeed":
+                ds["windspeed"] = waccmdaily.calculate_and_cache_wind_speed(year, ds)
+
+            full_time_str = f"00{full_time_str}"
+            if len(time) == 8:  # Specific day
+                data = ds[variable].sel(time=full_time_str).mean(dim="time")
+            elif len(time) == 5:  # Specific month
+                data = (
+                    ds[variable]
+                    .sel(time=full_time_str)
+                    .resample(time="ME")
+                    .mean()
+                    .isel(time=0)
+                )
+            elif len(time) > 8:  # Specific time
+                data = ds[variable].sel(time=full_time_str).isel(time=0)
+
+            return data
+
+        except KeyError:
+            print(f"Variable '{variable}' not found in the dataset.")
+            return None
+        except ValueError as e:
+            print(f"Error processing time '{time}': {e}")
+            return None
+        finally:
+            if "ds" in locals():
+                ds.close()
+
+    @staticmethod
+    def verify_time_format(time_str):
+        """
+        Verify the format of the input time string.
+
+        Args:
+            time_str (str): The time string to be verified.
+
+        Returns:
+            bool: True if the time string matches any of the allowed formats, False otherwise.
+
+        Expected formats are 'YY-MM-DDTHH:MM:SS', 'YY-MM-DD', or 'YY-MM'.
+        """
+        specific_time_pattern = r"^\d{2}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$"
+        specific_day_pattern = r"^\d{2}-\d{2}-\d{2}$"
+        specific_month_pattern = r"^\d{2}-\d{2}$"
+
+        if (
+            re.match(specific_time_pattern, time_str)
+            or re.match(specific_day_pattern, time_str)
+            or re.match(specific_month_pattern, time_str)
+        ):
+            return True
+        else:
+            return False
+
+    @staticmethod
+    def label(var):
+        """
+        Get a label for a given variable.
+
+        Args:
+            var (str): variable name
+
+        Returns:
+            str: label
+        """
+        if var == "a2x3h_Sa_u":
+            return "Eastward wind (m/s)"
+        elif var == "a2x3h_Sa_v":
+            return "Northward wind (m/s)"
+        elif var == "a2x3h_Sa_tbot":
+            return "Surface temperature (K)"
+        elif var == "a2x3h_Sa_shum":
+            return "Specific humidity (kg/kg)"
+        elif var == "a2x3h_Sa_pbot":
+            return "Surface pressure (Pa)"
+        elif var == "a2x3h_Faxa_rainc":
+            return "Convective precipitation rate (m/s)"
+        elif var == "a2x3h_Faxa_rainl":
+            return "Large-scale precipitation rate (m/s)"
+        elif var == "a2x3h_Faxa_swndr":
+            return "Downward solar radiation flux (W/m²)"
+        elif var == "a2x3h_Faxa_swvdr":
+            return "Downward visible solar radiation flux (W/m²)"
+        elif var == "a2x3h_Faxa_swndf":
+            return "Downward near-infrared solar radiation flux (W/m²)"
+        elif var == "a2x3h_Faxa_swvdf":
+            return "Downward visible near-infrared solar radiation flux (W/m²)"
+        elif var == "windspeed":
+            return "Wind speed (m/s)"
+        else:
+            return var
+
+    @staticmethod
+    def plot_map(var, time, zmin=None, zmax=None):
+        """
+        Plot data for a given variable at a given time on a map.
+
+        Args:
+            var (str): variable name
+            time (str): time specification, which can be a specific time, a specific day, or a specific month
+            zmax (float): maximum value for the color scale
+            zmin (float): minimum value for the color scale
+        """
+        data = waccmdaily.get(var, time)
+        if data is not None:
+            longitude = np.linspace(0, 360, data.shape[1], endpoint=False) - 180
+            latitude = np.linspace(-90, 90, data.shape[0])
+
+            # Adjust the longitude values and reorder the data to match the -180 to 180 range
+            split_index = np.searchsorted(longitude, 0)
+            data_reordered = np.hstack((data[:, split_index:], data[:, :split_index]))
+
+            fig, ax = plt.subplots(
+                figsize=(10, 6), subplot_kw={"projection": ccrs.PlateCarree()}
+            )
+            ax.coastlines()
+
+            cmap = "plasma" if var == "windspeed" else "viridis"
+
+            cf = ax.pcolormesh(
+                longitude,
+                latitude,
+                data_reordered,
+                shading="auto",
+                transform=ccrs.PlateCarree(),
+                cmap=cmap,
+                vmin=zmin,
+                vmax=zmax,
+            )
+
+            if len(time) == 5:
+                month = int(time[3:5])
+                year = int(time[:2])
+                plt.title(
+                    f"{waccmdaily.label(var)} in {waccm.month_name(month)} of Year {year} ({waccm.months_since_nw(year, month)} months since nuclear war)"
+                )
+            else:
+                plt.title(f"{waccmdaily.label(var)} at {time}")
+
+            # Adjust colorbar to match the plot height
+            cbar = plt.colorbar(
+                cf, ax=ax, shrink=0.7, orientation="vertical", label=waccmdaily.label(var)
+            )
+
+            plt.tight_layout()
+            plt.show()
