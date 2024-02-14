@@ -60,12 +60,12 @@ class GEM:
         Returns:
             pd.DataFrame: wind farm data
         """
-        file_path = "../data/global-energy-monitor/Global-Wind-Power-Tracker-December-2023.xlsx"
+        file_path = (
+            "../data/global-energy-monitor/Global-Wind-Power-Tracker-December-2023.xlsx"
+        )
         largescale = pd.read_excel(file_path, sheet_name=1)
         smallscale = pd.read_excel(file_path, sheet_name=2)
-        combined_df = pd.concat(
-            [largescale, smallscale], ignore_index=True
-        )
+        combined_df = pd.concat([largescale, smallscale], ignore_index=True)
         # drop cancelled projects
         combined_df = combined_df[combined_df["Status"] != "cancelled"]
         # drop shelved projects
@@ -94,7 +94,7 @@ class GEM:
             .sort_values(ascending=False)
             .head(5)
         )
-    
+
     def sum_operating_wind_farms_per_country(self):
         """
         Returns the total power operating capacity for the top 5 countries with wind farms.
@@ -166,6 +166,31 @@ class GEM:
             for month in range(1, 13):
                 time.append(waccm.months_since_nw(year, month))
                 data = waccm.get(var, year, month).isel(time=0)
+                data_value = data.sel(lat=lat, lon=lon, method="nearest")
+                ref_data_value = baseline_values[month]
+                series.append(data_value / ref_data_value)
+        time = np.array(time)
+        series = np.array(series)
+        baseline = np.array(list(baseline_values.values()))
+        baseline = baseline / baseline.sum()
+        return time, series, baseline
+
+    @staticmethod
+    def get_wind_power_time_series(lat, lon):
+        year_base = 11
+        var = "windspeed"
+        time = []
+        series = []
+        baseline_values = {}
+        for month in range(1, 13):
+            ref_data = waccmdaily.get(var, f"{year_base}-{month:02}")
+            print(ref_data)
+            ref_data_value = ref_data.sel(lat=lat, lon=lon, method="nearest")
+            baseline_values[month] = ref_data_value
+        for year in range(1, 11):
+            for month in range(1, 13):
+                time.append(waccm.months_since_nw(year, month))
+                data = waccmdaily.get(var, f"{year}-{month:02}")
                 data_value = data.sel(lat=lat, lon=lon, method="nearest")
                 ref_data_value = baseline_values[month]
                 series.append(data_value / ref_data_value)
@@ -271,7 +296,8 @@ class GEM:
             # same with baseline
             if existing_df_baseline is None:
                 existing_df_baseline = pd.DataFrame(
-                    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], columns=["Month_of_the_year"]
+                    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+                    columns=["Month_of_the_year"],
                 )
                 existing_df_baseline[country] = baseline
             else:
@@ -280,33 +306,91 @@ class GEM:
             # Write (or overwrite) the CSV file with updated data
             existing_df.to_csv(output_csv1, index=False)
             print(f"Saved {country} to {output_csv1}")
-            
+
             existing_df_baseline.to_csv(output_csv2, index=False)
             print(f"Saved {country} to {output_csv2}")
 
-        @staticmethod
-        def wind_power_output(v, v_cut_in=3, v_rated=15, v_cut_out=25, P_rated=1):
-            """
-            Calculate the wind turbine power output given a wind speed.
+    @staticmethod
+    def wind_power_output(v, v_cut_in=3, v_rated=15, v_cut_out=25, P_rated=1):
+        """
+        Calculate the wind turbine power output given a wind speed.
 
-            Parameters:
-            - v (float): Wind speed in meters per second (m/s).
-            - v_cut_in (float): Cut-in wind speed (m/s). Default is 3 m/s.
-            - v_rated (float): Rated wind speed (m/s). Default is 15 m/s.
-            - v_cut_out (float): Cut-out wind speed (m/s). Default is 25 m/s.
-            - P_rated (float): Max power.
+        Parameters:
+        - v (float): Wind speed in meters per second (m/s).
+        - v_cut_in (float): Cut-in wind speed (m/s). Default is 3 m/s.
+        - v_rated (float): Rated wind speed (m/s). Default is 15 m/s.
+        - v_cut_out (float): Cut-out wind speed (m/s). Default is 25 m/s.
+        - P_rated (float): Max power.
 
-            Returns:
-            - float: Power output (kW).
-            """
-            if v < v_cut_in or v > v_cut_out:
-                return 0
-            elif v_cut_in <= v < v_rated:
-                return P_rated * ((v - v_cut_in) / (v_rated - v_cut_in))**3
-            elif v_rated <= v <= v_cut_out:
-                return P_rated
-            else:
-                return 0 
+        Returns:
+        - float: Power output (kW).
+        """
+        if v < v_cut_in or v > v_cut_out:
+            return 0
+        elif v_cut_in <= v < v_rated:
+            return P_rated * ((v - v_cut_in) / (v_rated - v_cut_in)) ** 3
+        elif v_rated <= v <= v_cut_out:
+            return P_rated
+        else:
+            return 0
+
+    def plot_wind_farm_map(self):
+        """
+        Plot the location of wind farms on a map.
+        """
+        fig, ax = plt.subplots(
+            figsize=(10, 10),
+            subplot_kw=dict(projection=ccrs.PlateCarree()),
+        )
+        ax.set_extent([-180, 180, -90, 90], crs=ccrs.PlateCarree())
+        ax.add_feature(cfeature.LAND)
+        ax.add_feature(cfeature.OCEAN)
+        ax.add_feature(cfeature.COASTLINE, linewidth=0.5)
+        ax.add_feature(cfeature.BORDERS, linestyle="-", linewidth=0.5)
+        # ax.gridlines(draw_labels=True, dms=True, x_inline=False, y_inline=False)
+        ax.scatter(
+            self.wind_farms.Longitude,
+            self.wind_farms.Latitude,
+            s=0.01 * self.wind_farms["Capacity (MW)"],
+            color="blue",
+            alpha=0.2,
+            transform=ccrs.PlateCarree(),
+        )
+        plt.show()
+
+    def postprocess_aggregate_countries_solar(self, input_csv):
+        """
+        Calculate a weighted mean of the solar power variation for all countries.
+        Weights are given by the total solar power capacity of each country.
+
+        Args:
+            input_csv (str): path to the input CSV file, created by get_all_country_solar_power_time_series
+
+        Returns:
+            None, but displays a plot
+        """
+        df = pd.read_csv(input_csv)
+        df = df.set_index("Months_after_NW")
+        # iterate over columns with a loop
+        for col in df.columns:
+            df[col] = (
+                df[col]
+                * self.solar_farms[self.solar_farms.Country == col][
+                    "Capacity (MW)"
+                ].sum()
+            )
+        weighted_mean = (
+            df.iloc[:, :].sum(axis=1) / self.solar_farms["Capacity (MW)"].sum()
+        )
+
+        # make figure
+        fig, ax = plt.subplots(figsize=(10, 5))
+        ax.plot(df.index/12, weighted_mean)
+        ax.set_xlabel("Years after nuclear war")
+        ax.set_ylabel("Solar power compared to baseline")
+        plt.show()
+        return 
+
 
 class waccm:
     """
