@@ -137,6 +137,30 @@ class GEM:
         )
         plt.show()
 
+    def plot_wind_farm_map(self):
+        """
+        Plot the location of wind farms on a map.
+        """
+        fig, ax = plt.subplots(
+            figsize=(10, 10),
+            subplot_kw=dict(projection=ccrs.PlateCarree()),
+        )
+        ax.set_extent([-180, 180, -90, 90], crs=ccrs.PlateCarree())
+        ax.add_feature(cfeature.LAND)
+        ax.add_feature(cfeature.OCEAN)
+        ax.add_feature(cfeature.COASTLINE, linewidth=0.5)
+        ax.add_feature(cfeature.BORDERS, linestyle="-", linewidth=0.5)
+        # ax.gridlines(draw_labels=True, dms=True, x_inline=False, y_inline=False)
+        ax.scatter(
+            self.wind_farms.Longitude,
+            self.wind_farms.Latitude,
+            s=0.01 * self.wind_farms["Capacity (MW)"],
+            color="blue",
+            alpha=0.2,
+            transform=ccrs.PlateCarree(),
+        )
+        plt.show()
+
     @staticmethod
     def get_solar_flux_time_series(lat, lon):
         """
@@ -152,7 +176,7 @@ class GEM:
         Returns:
             np.array: time
             np.array: series of solar flux (1 is the baseline, 0 is no solar flux)
-            np.array: baseline values for each month
+            np.array: seasonal variation of solar flux (baseline)
         """
         year_base = 16
         var = "FSDS"
@@ -177,24 +201,68 @@ class GEM:
         return time, series, baseline
 
     @staticmethod
-    def get_wind_power_time_series(lat, lon):
-        year_base = 11
-        var = "windspeed"
+    def wind_power_output(v, v_cut_in=3, v_rated=15, v_cut_out=25, P_rated=1):
+        """
+        Calculate the wind turbine power output given a wind speed.
+
+        Arges:
+            v (float): Wind speed in meters per second (m/s).
+            v_cut_in (float): Cut-in wind speed (m/s). Default is 3 m/s.
+            v_rated (float): Rated wind speed (m/s). Default is 15 m/s.
+            v_cut_out (float): Cut-out wind speed (m/s). Default is 25 m/s.
+            P_rated (float): Max power.
+
+        Returns:
+            float: Power output.
+        """
+        if v < v_cut_in or v > v_cut_out:
+            return 0
+        elif v_cut_in <= v < v_rated:
+            return P_rated * ((v - v_cut_in) / (v_rated - v_cut_in)) ** 3
+        elif v_rated <= v <= v_cut_out:
+            return P_rated
+        else:
+            return 0
+
+    @staticmethod
+    def get_power_time_series(lat, lon, power_type):
+        """
+        Get the time series of wind or solar power output at a given location. The power is normalized by the
+        baseline power at the same location, so that 1 is the baseline and 0 is no power.
+
+        Args:
+            lat (float): latitude
+            lon (float): longitude
+            power_type (str): type of power ("wind" or "solar")
+
+        Returns:
+            np.array: time
+            np.array: series of power (1 is the baseline, 0 is no power)
+            np.array: seasonal variation of power (baseline)
+        """
+        if power_type == "wind":
+            var = "windspeed"
+        elif power_type == "solar":
+            var = "a2x3h_Faxa_swndr"
         time = []
         series = []
         baseline_values = {}
+        lon = (lon + 360) % 360
         for month in range(1, 13):
-            ref_data = waccmdaily.get(var, f"{year_base}-{month:02}")
-            print(ref_data)
-            ref_data_value = ref_data.sel(lat=lat, lon=lon, method="nearest")
+            year_base = 5
+            ref_data = waccmdaily.get(var, f"{year_base:02}-{month:02}", sim="control")
+            ref_data_value = ref_data.sel(a2x3h_ny=lat, a2x3h_nx=lon, method="nearest")
+            if power_type == "wind":
+                ref_data_value = GEM.wind_power_output(ref_data_value)
             baseline_values[month] = ref_data_value
         for year in range(1, 11):
             for month in range(1, 13):
                 time.append(waccm.months_since_nw(year, month))
-                data = waccmdaily.get(var, f"{year}-{month:02}")
-                data_value = data.sel(lat=lat, lon=lon, method="nearest")
-                ref_data_value = baseline_values[month]
-                series.append(data_value / ref_data_value)
+                data = waccmdaily.get(var, f"{year:02}-{month:02}", sim="NW")
+                data_value = data.sel(a2x3h_ny=lat, a2x3h_nx=lon, method="nearest")
+                if power_type == "wind":
+                    data_value = GEM.wind_power_output(data_value)
+                series.append(data_value / baseline_values[month])
         time = np.array(time)
         series = np.array(series)
         baseline = np.array(list(baseline_values.values()))
@@ -311,54 +379,6 @@ class GEM:
             existing_df_baseline.to_csv(output_csv2, index=False)
             print(f"Saved {country} to {output_csv2}")
 
-    @staticmethod
-    def wind_power_output(v, v_cut_in=3, v_rated=15, v_cut_out=25, P_rated=1):
-        """
-        Calculate the wind turbine power output given a wind speed.
-
-        Parameters:
-        - v (float): Wind speed in meters per second (m/s).
-        - v_cut_in (float): Cut-in wind speed (m/s). Default is 3 m/s.
-        - v_rated (float): Rated wind speed (m/s). Default is 15 m/s.
-        - v_cut_out (float): Cut-out wind speed (m/s). Default is 25 m/s.
-        - P_rated (float): Max power.
-
-        Returns:
-        - float: Power output (kW).
-        """
-        if v < v_cut_in or v > v_cut_out:
-            return 0
-        elif v_cut_in <= v < v_rated:
-            return P_rated * ((v - v_cut_in) / (v_rated - v_cut_in)) ** 3
-        elif v_rated <= v <= v_cut_out:
-            return P_rated
-        else:
-            return 0
-
-    def plot_wind_farm_map(self):
-        """
-        Plot the location of wind farms on a map.
-        """
-        fig, ax = plt.subplots(
-            figsize=(10, 10),
-            subplot_kw=dict(projection=ccrs.PlateCarree()),
-        )
-        ax.set_extent([-180, 180, -90, 90], crs=ccrs.PlateCarree())
-        ax.add_feature(cfeature.LAND)
-        ax.add_feature(cfeature.OCEAN)
-        ax.add_feature(cfeature.COASTLINE, linewidth=0.5)
-        ax.add_feature(cfeature.BORDERS, linestyle="-", linewidth=0.5)
-        # ax.gridlines(draw_labels=True, dms=True, x_inline=False, y_inline=False)
-        ax.scatter(
-            self.wind_farms.Longitude,
-            self.wind_farms.Latitude,
-            s=0.01 * self.wind_farms["Capacity (MW)"],
-            color="blue",
-            alpha=0.2,
-            transform=ccrs.PlateCarree(),
-        )
-        plt.show()
-
     def postprocess_aggregate_countries_solar(self, input_csv):
         """
         Calculate a weighted mean of the solar power variation for all countries.
@@ -392,7 +412,9 @@ class GEM:
         plt.show()
         return
 
-    def postprocess_solar_map(self, fraction_csv_file, baseline_csv_file, zmin=None, zmax=None):
+    def postprocess_solar_map(
+        self, fraction_csv_file, baseline_csv_file, zmin=None, zmax=None
+    ):
         """
         Makes a map of solar power reduction over the year in each country.
 
@@ -449,8 +471,8 @@ class GEM:
                     "shrink": 0.5,
                 },
                 cmap="viridis",
-                vmin=zmin,  
-                vmax=zmax,  
+                vmin=zmin,
+                vmax=zmax,
             )
             world[world["solar_reduction"].isna()].plot(ax=ax, color="lightgrey")
 
@@ -460,10 +482,11 @@ class GEM:
 
             plt.savefig(f"../results/solar_reduction_map_{year:02}.pdf", dpi=300)
 
-        os.system(  
+        os.system(
             "pdfunite ../results/solar_reduction_map_*.pdf ../results/solar_reduction_map.pdf"
         )
         os.system("rm ../results/solar_reduction_map_*.pdf")
+
 
 class waccm:
     """
@@ -933,18 +956,19 @@ class waccmdaily:
         return waccmdaily.wind_speed_cache[cache_key]
 
     @staticmethod
-    def get(variable, time):
+    def get(variable, time, sim):
         """
         Retrieve data for a specific variable at a given time from an xarray dataset,
         loading the dataset from a file based on the year in the time argument.
 
         Args:
-        variable (str): the name of the variable to retrieve
-        time (str): the time specification, which can be a specific time, a specific day, or a specific month
-            nuclear winter starts in May of year 1 (which is actually year 5 in the dataset)
+            variable (str): the name of the variable to retrieve
+            time (str): the time specification, which can be a specific time, a specific day, or a specific month
+                nuclear winter starts in May of year 1 (which is actually year 5 in the dataset)
+            sim (str): the simulation to retrieve the data from, either "control" or "NW"
 
         Returns:
-        xarray.DataArray or None: The requested data or None if the operation cannot be completed
+            xarray.DataArray or None: The requested data or None if the operation cannot be completed
         """
         if not waccmdaily.verify_time_format(time):
             print(
@@ -981,6 +1005,10 @@ class waccmdaily:
                 )
             elif len(time) > 8:  # Specific time
                 data = ds[variable].sel(time=full_time_str).isel(time=0)
+
+            latitude = np.linspace(-90, 90, data.shape[0])
+            longitude = np.linspace(0, 360, data.shape[1], endpoint=False)
+            data = data.assign_coords(a2x3h_ny=("a2x3h_ny", latitude), a2x3h_nx=("a2x3h_nx", longitude))
 
             return data
 
@@ -1071,13 +1099,6 @@ class waccmdaily:
         """
         data = waccmdaily.get(var, time)
         if data is not None:
-            longitude = np.linspace(0, 360, data.shape[1], endpoint=False) - 180
-            latitude = np.linspace(-90, 90, data.shape[0])
-
-            # Adjust the longitude values and reorder the data to match the -180 to 180 range
-            split_index = np.searchsorted(longitude, 0)
-            data_reordered = np.hstack((data[:, split_index:], data[:, :split_index]))
-
             fig, ax = plt.subplots(
                 figsize=(10, 6), subplot_kw={"projection": ccrs.PlateCarree()}
             )
@@ -1086,9 +1107,9 @@ class waccmdaily:
             cmap = "plasma" if var == "windspeed" else "viridis"
 
             cf = ax.pcolormesh(
-                longitude,
-                latitude,
-                data_reordered,
+                data.lon,
+                data.lat,
+                data.values,
                 shading="auto",
                 transform=ccrs.PlateCarree(),
                 cmap=cmap,
