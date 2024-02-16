@@ -201,30 +201,6 @@ class GEM:
         return time, series, baseline
 
     @staticmethod
-    def wind_power_output(v, v_cut_in=3, v_rated=15, v_cut_out=25, P_rated=1):
-        """
-        Calculate the wind turbine power output given a wind speed.
-
-        Arges:
-            v (float): Wind speed in meters per second (m/s).
-            v_cut_in (float): Cut-in wind speed (m/s). Default is 0 m/s.
-            v_rated (float): Rated wind speed (m/s). Default is 15 m/s.
-            v_cut_out (float): Cut-out wind speed (m/s). Default is 25 m/s.
-            P_rated (float): Max power.
-
-        Returns:
-            float: Power output.
-        """
-        if v < v_cut_in or v > v_cut_out:
-            return 0
-        elif v_cut_in <= v < v_rated:
-            return P_rated * ((v - v_cut_in) / (v_rated - v_cut_in)) ** 3
-        elif v_rated <= v <= v_cut_out:
-            return P_rated
-        else:
-            return 0
-
-    @staticmethod
     def get_solar_flux_time_series(lat, lon):
         """
         Get the time series of solar flux at a given location. The solar flux is normalized by the
@@ -286,22 +262,20 @@ class GEM:
         for month in range(1, 13):
             monthly_power = []
             for year in range(1, 11):
-                data = waccmwind.get(year, month, sim="control")
-                data_value = data.sel(
+                data = waccmwind.get(year, month, sim="control", var="windpower")
+                power_output = data.sel(
                     a2x3h_ny=lat, a2x3h_nx=lon, method="nearest"
-                ).windspeed.values
-                power_output = GEM.wind_power_output(data_value) ## change this because I will use hourly-averaged averaged wind powrer
+                ).windpower.values
                 monthly_power.append(power_output)
             baseline_values[month] = sum(monthly_power) / len(monthly_power)
 
         for year in range(1, 14):
             for month in range(1, 13):
                 time.append(waccm.months_since_nw(year, month))
-                data = waccmwind.get(year, month, sim="catastrophe")
+                data = waccmwind.get(year, month, sim="catastrophe", var="windpower")
                 data_value = data.sel(
                     a2x3h_ny=lat, a2x3h_nx=lon, method="nearest"
-                ).windspeed.values
-                data_value = GEM.wind_power_output(data_value)  ## change this because I will use hourly-averaged averaged wind powrer
+                ).windpower.values
                 series.append(data_value / baseline_values[month])
         time = np.array(time)
         series = np.array(series)
@@ -1093,7 +1067,7 @@ class waccmwind:
     """
 
     @staticmethod
-    def get(year, month, sim):
+    def get(year, month, sim, var="windspeed"):
         """
         Retrieve wind data for a given year and month.
 
@@ -1101,12 +1075,13 @@ class waccmwind:
             year (int): year, where year 1 is the year of the nuclear war
             month (int): month
             sim (str): simulation name ("control" or "catastrophe")
+            var (str): variable name ("windpower" or "windspeed")
 
         Returns:
             xr.Dataset: wind data
         """
         year = year + 4
-        filepath = f"../data/wind-data/windspeed_{sim}_{year:02}.nc"
+        filepath = f"../data/wind-data/{var}_{sim}_{year:02}.nc"
         ds = xr.open_dataset(filepath)
         return ds.sel(time=f"{year:04}-{month:02}").isel(time=0)
 
@@ -1121,8 +1096,9 @@ class waccmwind:
             sim (str): simulation name ("control" or "catastrophe")
             zmin (float): minimum value for the color scale
             zmax (float): maximum value for the color scale
+            var (str): variable name ("windpower" or "windspeed")
         """
-        data = waccmwind.get(year, month, sim)
+        data = waccmwind.get(year, month, sim, var=var)
         if data is not None:
             fig, ax = plt.subplots(
                 figsize=(10, 6), subplot_kw={"projection": ccrs.PlateCarree()}
