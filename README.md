@@ -2,7 +2,7 @@
 This repo was set up to analyze the nuclear winter climate model of [Coupe et al. 2019](https://agupubs.onlinelibrary.wiley.com/doi/full/10.1029/2019JD030509) to look at the impact of a nuclear winter on renewable energy production.
 
 ## Codebase orientation
-* `scripts/Explore.ipynb` queries the Coupe et al. data to make some useful figures. Start there; it contains useful explanations.
+* `scripts/Explore.ipynb` queries the Coupe et al. montly average data to make some useful figures. 
 * `scripts/Solar-Power.ipynb` combines the Coupe et al. data with a database of solar farms to quantify the effect of a nuclear winter on solar power production.
 * `scripts/Wind-Power.ipynb` combines the Coupe et al. data with a database of wind farms to quantify the effect of a nuclear winter on wind power production.
 * `src/analysis.py` contains the main code for this project.
@@ -18,3 +18,4 @@ In addition to the Coupe et al. data, the `data` directory now contains a databa
 
 ## Caveats
 * Wind speed and wind power are calculated at the lowest level of the climate models. Perhaps we should instead consider higher levels to account for the height of wind turbines, but this data is not readily available at the moment.
+* Some countries in some months can have multiple times the baseline wind power because the baseline wind power is close to zero. I find this suspicious: wind farms are typically not built where the is little wind. It is possible that the global climate model is missing important information on wind patterns that would require a higher spatial resolution to resolve.
