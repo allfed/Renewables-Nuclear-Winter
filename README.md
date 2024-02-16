@@ -15,3 +15,6 @@ This repo was set up to analyze the nuclear winter climate model of [Coupe et al
 
 ## Sources
 In addition to the Coupe et al. data, the `data` directory now contains a database of solar farms and wind farms, downloaded from `https://globalenergymonitor.org/`. The data contained in `data/wind-data` has been calculated in the `Climate-Data-Importing` repo. It consists of wind speed data and wind power data. Both data sets are averaged monthly from data with a 3-hour resolution. Wind power is calculated by passing the 3-hour resolution wind speed data through a typical wind turbine speed-power response function. Unlike solar power (which responds linearly to solar flux), wind power must be pre-processed at a higher time resolution because of the non-linear response to wind speed.
+
+## Caveats
+* Wind speed and wind power are calculated at the lowest level of the climate models. Perhaps we should instead consider higher levels to account for the height of wind turbines, but this data is not readily available at the moment.
