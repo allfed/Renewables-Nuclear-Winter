@@ -21,102 +21,71 @@ plt.style.use(
 
 class GEM:
     def __init__(self):
-        self.solar_farms = self.load_solar_farms()
-        self.wind_farms = self.load_wind_farms()
+        self.solar_farms = self.load_farms(energy="solar")
+        self.wind_farms = self.load_farms(energy="wind")
+        self.solar_maxyear = 15
+        self.wind_maxyear = 12
 
-    def load_solar_farms(self):
+    def load_farms(self, energy):
         """
-        Load solar farm data from Global Energy Monitor.
+        Load solar/wind farm data from Global Energy Monitor.
 
         Only projects that are operating, announced, in construction, or in pre-construction are included.
+
+        Args:
+            energy (str): "solar" or "wind"
 
         Returns:
             pd.DataFrame: solar farm data
         """
-        file_path = "../data/global-energy-monitor/Global-Solar-Power-Tracker-December-2023.xlsx"
+        file_path = f"../data/global-energy-monitor/Global-{energy.capitalize()}-Power-Tracker-December-2023.xlsx"
         largescale = pd.read_excel(file_path, sheet_name=1)
         mediumscale = pd.read_excel(file_path, sheet_name=2)
-        smallscale = pd.read_excel(file_path, sheet_name=3)
-        combined_df = pd.concat(
-            [largescale, mediumscale, smallscale], ignore_index=True
-        )
-        # drop cancelled projects
+        if energy == "solar":
+            smallscale = pd.read_excel(file_path, sheet_name=3)
+            combined_df = pd.concat(
+                [largescale, mediumscale, smallscale], ignore_index=True
+            )
+        else:
+            combined_df = pd.concat([largescale, mediumscale], ignore_index=True)
         combined_df = combined_df[combined_df["Status"] != "cancelled"]
-        # drop shelved projects
         combined_df = combined_df[combined_df["Status"] != "shelved"]
-        # drop retired projects
         combined_df = combined_df[combined_df["Status"] != "retired"]
-        # drop mothballed projects
         combined_df = combined_df[combined_df["Status"] != "mothballed"]
         return combined_df[
             ["Country", "Latitude", "Longitude", "Capacity (MW)", "Status"]
         ]
 
-    def load_wind_farms(self):
-        """
-        Load wind farm data from Global Energy Monitor.
-
-        Only projects that are operating, announced, in construction, or in pre-construction are included.
-
-        Returns:
-            pd.DataFrame: wind farm data
-        """
-        file_path = (
-            "../data/global-energy-monitor/Global-Wind-Power-Tracker-December-2023.xlsx"
-        )
-        largescale = pd.read_excel(file_path, sheet_name=1)
-        smallscale = pd.read_excel(file_path, sheet_name=2)
-        combined_df = pd.concat([largescale, smallscale], ignore_index=True)
-        # drop cancelled projects
-        combined_df = combined_df[combined_df["Status"] != "cancelled"]
-        # drop shelved projects
-        combined_df = combined_df[combined_df["Status"] != "shelved"]
-        # drop retired projects
-        combined_df = combined_df[combined_df["Status"] != "retired"]
-        # drop mothballed projects
-        combined_df = combined_df[combined_df["Status"] != "mothballed"]
-        return combined_df[
-            ["Country", "Latitude", "Longitude", "Capacity (MW)", "Status"]
-        ]
-
-    def sum_operating_solar_farms_per_country(self):
+    def sum_operating_farms_per_country(self, energy):
         """
         Returns the total power operating capacity for the top 5 countries with solar farms.
 
         Useful for validation.
 
+        Args:
+            energy (str): "solar" or "wind"
+
         Returns:
             pd.Series: total power operating capacity for the top 5 countries with solar farms
         """
+        df = self.solar_farms if energy == "solar" else self.wind_farms
         return (
-            self.solar_farms[self.solar_farms.Status == "operating"]
+            df[df.Status == "operating"]
             .groupby("Country")["Capacity (MW)"]
             .sum()
             .sort_values(ascending=False)
             .head(5)
         )
 
-    def sum_operating_wind_farms_per_country(self):
-        """
-        Returns the total power operating capacity for the top 5 countries with wind farms.
-
-        Useful for validation.
-
-        Returns:
-            pd.Series: total power operating capacity for the top 5 countries with wind farms
-        """
-        return (
-            self.wind_farms[self.wind_farms.Status == "operating"]
-            .groupby("Country")["Capacity (MW)"]
-            .sum()
-            .sort_values(ascending=False)
-            .head(5)
-        )
-
-    def plot_solar_farm_map(self):
+    def plot_farm_map(self, energy):
         """
         Plot the location of solar farms on a map.
+
+        Args:
+            energy (str): "solar" or "wind"
         """
+        df = self.solar_farms if energy == "solar" else self.wind_farms
+        color = "orange" if energy == "solar" else "blue"
         fig, ax = plt.subplots(
             figsize=(10, 10),
             subplot_kw=dict(projection=ccrs.PlateCarree()),
@@ -128,77 +97,14 @@ class GEM:
         ax.add_feature(cfeature.BORDERS, linestyle="-", linewidth=0.5)
         # ax.gridlines(draw_labels=True, dms=True, x_inline=False, y_inline=False)
         ax.scatter(
-            self.solar_farms.Longitude,
-            self.solar_farms.Latitude,
-            s=0.01 * self.solar_farms["Capacity (MW)"],
-            color="orange",
+            df.Longitude,
+            df.Latitude,
+            s=0.01 * df["Capacity (MW)"],
+            color=color,
             alpha=0.5,
             transform=ccrs.PlateCarree(),
         )
         plt.show()
-
-    def plot_wind_farm_map(self):
-        """
-        Plot the location of wind farms on a map.
-        """
-        fig, ax = plt.subplots(
-            figsize=(10, 10),
-            subplot_kw=dict(projection=ccrs.PlateCarree()),
-        )
-        ax.set_extent([-180, 180, -90, 90], crs=ccrs.PlateCarree())
-        ax.add_feature(cfeature.LAND)
-        ax.add_feature(cfeature.OCEAN)
-        ax.add_feature(cfeature.COASTLINE, linewidth=0.5)
-        ax.add_feature(cfeature.BORDERS, linestyle="-", linewidth=0.5)
-        # ax.gridlines(draw_labels=True, dms=True, x_inline=False, y_inline=False)
-        ax.scatter(
-            self.wind_farms.Longitude,
-            self.wind_farms.Latitude,
-            s=0.01 * self.wind_farms["Capacity (MW)"],
-            color="blue",
-            alpha=0.2,
-            transform=ccrs.PlateCarree(),
-        )
-        plt.show()
-
-    @staticmethod
-    def get_solar_flux_time_series(lat, lon):
-        """
-        Get the time series of solar flux at a given location. The solar flux is normalized by the
-        baseline solar flux at the same location, so that 1 is the baseline and 0 is no solar flux.
-        The baseline is the average solar flux for each month for the last year of the simulation
-        (year 16).
-
-        Args:
-            lat (float): latitude
-            lon (float): longitude
-
-        Returns:
-            np.array: time
-            np.array: series of solar flux (1 is the baseline, 0 is no solar flux)
-            np.array: seasonal variation of solar flux (baseline)
-        """
-        year_base = 16
-        var = "FSDS"
-        time = []
-        series = []
-        baseline_values = {}
-        for month in range(1, 13):
-            ref_data = waccm.get(var, year_base, month).isel(time=0)
-            ref_data_value = ref_data.sel(lat=lat, lon=lon, method="nearest")
-            baseline_values[month] = ref_data_value
-        for year in range(1, 16):
-            for month in range(1, 13):
-                time.append(waccm.months_since_nw(year, month))
-                data = waccm.get(var, year, month).isel(time=0)
-                data_value = data.sel(lat=lat, lon=lon, method="nearest")
-                ref_data_value = baseline_values[month]
-                series.append(data_value / ref_data_value)
-        time = np.array(time)
-        series = np.array(series)
-        baseline = np.array(list(baseline_values.values()))
-        baseline = baseline / baseline.sum()
-        return time, series, baseline
 
     @staticmethod
     def get_solar_flux_time_series(lat, lon):
@@ -283,56 +189,58 @@ class GEM:
         baseline = baseline / baseline.sum()
         return time, series, baseline
 
-    def get_solar_flux_for_farm(self, row):
+    def get_power_for_farm(self, row, energy):
         """
-        Helper function to compute the solar flux time series for a single solar farm.
-        This function will be called in parallel for each solar farm.
-        """
-        lat = row["Latitude"]
-        lon = row["Longitude"]
-        capacity = row["Capacity (MW)"]
-        time, series, baseline = self.get_solar_flux_time_series(lat, lon)
-        weighted_series = series * capacity
-        weighted_baseline = baseline * capacity
-        return weighted_series, weighted_baseline
-
-    def get_wind_power_for_farm(self, row):
-        """
-        Helper function to compute the wind power time series for a single wind farm.
+        Helper function to compute the sun/wind power time series for a single wind farm.
         This function will be called in parallel for each wind farm.
         """
         lat = row["Latitude"]
         lon = row["Longitude"]
         capacity = row["Capacity (MW)"]
-        time, series, baseline = self.get_wind_power_time_series(lat, lon)
+        if energy == "solar":
+            time, series, baseline = self.get_solar_flux_time_series(lat, lon)
+        elif energy == "wind":
+            time, series, baseline = self.get_wind_power_time_series(lat, lon)
+        else:
+            raise ValueError("energy must be 'solar' or 'wind'")
         weighted_series = series * capacity
         weighted_baseline = baseline * capacity
         return weighted_series, weighted_baseline
 
-    def get_country_solar_power_time_series(self, country):
+    def get_country_power_time_series(self, country, energy):
         """
-        Average solar power variation compared to baseline for a given country.
-        We are averaging over the locations of all solar farms in the country,
+        Average solar/wind power variation compared to baseline for a given country.
+        We are averaging over the locations of all solar/wind farms in the country,
         weighted by their capacity.
 
         Args:
             country (str): country name
+            energy (str): "solar" or "wind"
 
         Returns:
             np.array: time
             np.array: country-aggregated series of solar power variation compared to baseline
                 (1 is the baseline, 0 is no solar power)
         """
-        df = self.solar_farms[self.solar_farms.Country == country]
-        total_capacity = df["Capacity (MW)"].sum()
-        country_aggregated_series = np.zeros(180)
-        country_aggregated_baseline = np.zeros(12)
+        if energy == "solar":
+            df = self.solar_farms[self.solar_farms.Country == country]
+            country_aggregated_series = np.zeros(180)
+        elif energy == "wind":
+            df = self.wind_farms[self.wind_farms.Country == country]
+            country_aggregated_series = np.zeros(156)
+        else:
+            raise ValueError("energy must be 'solar' or 'wind'")
 
+        total_capacity = df["Capacity (MW)"].sum()
+
+        country_aggregated_baseline = np.zeros(12)
         pbar = tqdm.tqdm(total=len(df))
 
         with ProcessPoolExecutor() as executor:
             futures = {
-                executor.submit(self.get_solar_flux_for_farm, row): row["Capacity (MW)"]
+                executor.submit(self.get_power_for_farm, row, energy): row[
+                    "Capacity (MW)"
+                ]
                 for _, row in df.iterrows()
             }
 
@@ -343,50 +251,16 @@ class GEM:
                 pbar.update(1)
         pbar.close()
 
-        time, _, _ = self.get_solar_flux_time_series(0, 0)
+        if energy == "solar":
+            time, _, _ = self.get_solar_flux_time_series(0, 0)
+        else:
+            time, _, _ = self.get_wind_power_time_series(0, 0)
+
         return time, country_aggregated_series, country_aggregated_baseline
 
-    def get_country_wind_power_time_series(self, country):
-        """
-        Average wind power variation compared to baseline for a given country.
-        We are averaging over the locations of all wind farms in the country,
-        weighted by their capacity.
-
-        Args:
-            country (str): country name
-
-        Returns:
-            np.array: time
-            np.array: country-aggregated series of wind power variation compared to baseline
-                (1 is the baseline, 0 is no wind power)
-        """
-        df = self.wind_farms[self.wind_farms.Country == country]
-        total_capacity = df["Capacity (MW)"].sum()
-        country_aggregated_series = np.zeros(156)
-        country_aggregated_baseline = np.zeros(12)
-
-        pbar = tqdm.tqdm(total=len(df))
-
-        with ProcessPoolExecutor() as executor:
-            futures = {
-                executor.submit(self.get_wind_power_for_farm, row): row["Capacity (MW)"]
-                for _, row in df.iterrows()
-            }
-
-            for future in as_completed(futures):
-                weighted_series, weighted_baseline = future.result()
-                country_aggregated_series += weighted_series / total_capacity
-                country_aggregated_baseline += weighted_baseline / total_capacity
-                pbar.update(1)
-        pbar.close()
-
-        time, _, _ = self.get_wind_power_time_series(0, 0)
-        return time, country_aggregated_series, country_aggregated_baseline
-
-    def get_all_country_solar_power_time_series(
+    def get_all_country_time_series(
         self,
-        output_csv1="../results/fraction_of_solar_power_countries.csv",
-        output_csv2="../results/baseline_seasonality_solar_power_countries.csv",
+        energy,
     ):
         """
         Calculates the average solar power variation compared to baseline for all countries.
@@ -394,11 +268,14 @@ class GEM:
         Output is saved to a CSV file.
 
         Args:
-            output_csv1 (str): path to the output CSV file for the solar power variation
-            output_csv2 (str): path to the output CSV file for the baseline seasonality
+            energy (str): "solar" or "wind"
         """
+        output_csv1 = f"../results/fraction_of_{energy}_power_countries.csv"
+        output_csv2 = f"../results/baseline_seasonality_{energy}_power_countries.csv"
+        gem_df = self.solar_farms if energy == "solar" else self.wind_farms
+
         # Sort countries alphabetically
-        countries = sorted(self.solar_farms["Country"].unique())
+        countries = sorted(gem_df["Country"].unique())
 
         # Check if the output file already exists to determine where to resume
         try:
@@ -417,7 +294,7 @@ class GEM:
         # Process each country
         for country in countries_to_process:
             print(f"Processing {country}...")
-            time, series, baseline = self.get_country_solar_power_time_series(country)
+            time, series, baseline = self.get_country_power_time_series(country, energy)
 
             # If this is the first country being processed, initialize DataFrame
             if existing_df is None:
@@ -443,101 +320,36 @@ class GEM:
             existing_df_baseline.to_csv(output_csv2, index=False)
             print(f"Saved {country} to {output_csv2}")
 
-    def get_all_country_wind_power_time_series(
-        self,
-        output_csv1="../results/fraction_of_wind_power_countries.csv",
-        output_csv2="../results/baseline_seasonality_wind_power_countries.csv",
-    ):
+    def postprocess_aggregate_countries(self, input_csv, energy):
         """
-        Calculates the average wind power variation compared to baseline for all countries.
-
-        Output is saved to a CSV file.
-
-        Args:
-            output_csv1 (str): path to the output CSV file for the wind power variation
-            output_csv2 (str): path to the output CSV file for the baseline seasonality
-        """
-        # Sort countries alphabetically
-        countries = sorted(self.wind_farms["Country"].unique())
-
-        # Check if the output file already exists to determine where to resume
-        try:
-            existing_df = pd.read_csv(output_csv1)
-            existing_df_baseline = pd.read_csv(output_csv2)
-            completed_countries = existing_df.columns[1:]  # Exclude 'Time' column
-            countries_to_process = [
-                c for c in countries if c not in completed_countries
-            ]
-        except FileNotFoundError:
-            # If file does not exist, start from scratch
-            existing_df = None
-            existing_df_baseline = None
-            countries_to_process = countries
-
-        # Process each country
-        for country in countries_to_process:
-            print(f"Processing {country}...")
-            time, series, baseline = self.get_country_wind_power_time_series(country)
-
-            # If this is the first country being processed, initialize DataFrame
-            if existing_df is None:
-                existing_df = pd.DataFrame(time, columns=["Months_after_NW"])
-                existing_df[country] = series
-            else:
-                existing_df[country] = series
-
-            # same with baseline
-            if existing_df_baseline is None:
-                existing_df_baseline = pd.DataFrame(
-                    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
-                    columns=["Month_of_the_year"],
-                )
-                existing_df_baseline[country] = baseline
-            else:
-                existing_df_baseline[country] = baseline
-
-            # Write (or overwrite) the CSV file with updated data
-            existing_df.to_csv(output_csv1, index=False)
-            print(f"Saved {country} to {output_csv1}")
-
-            existing_df_baseline.to_csv(output_csv2, index=False)
-            print(f"Saved {country} to {output_csv2}")
-
-    def postprocess_aggregate_countries_solar(self, input_csv):
-        """
-        Calculate a weighted mean of the solar power variation for all countries.
-        Weights are given by the total solar power capacity of each country.
+        Calculate a weighted mean of the solar/wind power variation for all countries.
+        Weights are given by the total solar/wind power capacity of each country.
 
         Args:
             input_csv (str): path to the input CSV file, created by get_all_country_solar_power_time_series
+            energy (str): "solar" or "wind"
 
         Returns:
             None, but displays a plot
         """
         df = pd.read_csv(input_csv)
         df = df.set_index("Months_after_NW")
+        gem_df = self.solar_farms if energy == "solar" else self.wind_farms
         # iterate over columns with a loop
         for col in df.columns:
-            df[col] = (
-                df[col]
-                * self.solar_farms[self.solar_farms.Country == col][
-                    "Capacity (MW)"
-                ].sum()
-            )
-        weighted_mean = (
-            df.iloc[:, :].sum(axis=1) / self.solar_farms["Capacity (MW)"].sum()
-        )
+            df[col] = df[col] * gem_df[gem_df.Country == col]["Capacity (MW)"].sum()
+        weighted_mean = df.iloc[:, :].sum(axis=1) / gem_df["Capacity (MW)"].sum()
 
         # make figure
         fig, ax = plt.subplots(figsize=(10, 5))
         ax.plot(df.index / 12, weighted_mean)
         ax.set_xlabel("Years after nuclear war")
-        ax.set_ylabel("Solar power compared to baseline")
+        ax.set_ylabel(f"{energy.capitalize()} power compared to baseline")
         plt.show()
         return
 
-    def postprocess_solar_map(
-        self, fraction_csv_file, baseline_csv_file, zmin=None, zmax=None
+    def postprocess_country_map(
+        self, fraction_csv_file, baseline_csv_file, energy, zmin=None, zmax=None
     ):
         """
         Makes a map of solar power reduction over the year in each country.
@@ -547,13 +359,15 @@ class GEM:
         Args:
             fraction_csv_file (str): path to the CSV file with the fraction of solar power
             baseline_csv_file (str): path to the CSV file with the baseline seasonality
+            energy (str): "solar" or "wind"
             zmin (float): minimum value for the color scale
             zmax (float): maximum value for the color scale
 
         Returns:
             None, but displays a plot
         """
-        for year in range(1, 15):
+        maxyear = self.solar_maxyear if energy == "solar" else self.wind_maxyear
+        for year in range(1, maxyear):
             fraction_csv = pd.read_csv(fraction_csv_file)
             fraction_csv = fraction_csv.loc[year * 12 : (year + 1) * 12 - 1]
             baseline_csv = pd.read_csv(baseline_csv_file)
@@ -582,15 +396,15 @@ class GEM:
             country_dict = {name_mapping.get(k, k): v for k, v in country_dict.items()}
 
             world = gpd.read_file(gpd.datasets.get_path("naturalearth_lowres"))
-            world["solar_reduction"] = world["name"].map(country_dict)
+            world["reduction"] = world["name"].map(country_dict)
             fig, ax = plt.subplots(1, 1, figsize=(15, 10))
             world.boundary.plot(ax=ax, linewidth=0.5, color="k")
-            world.dropna(subset=["solar_reduction"]).plot(
-                column="solar_reduction",
+            world.dropna(subset=["reduction"]).plot(
+                column="reduction",
                 ax=ax,
                 legend=True,
                 legend_kwds={
-                    "label": "Solar power compared to baseline (%)",
+                    "label": f"{energy.capitalize()} power compared to baseline (%)",
                     "orientation": "vertical",
                     "shrink": 0.5,
                 },
@@ -598,18 +412,18 @@ class GEM:
                 vmin=zmin,
                 vmax=zmax,
             )
-            world[world["solar_reduction"].isna()].plot(ax=ax, color="lightgrey")
+            world[world["reduction"].isna()].plot(ax=ax, color="lightgrey")
 
             ax.set_axis_off()
             ax.grid(False)
             plt.title(f"Year {year} after nuclear war")
 
-            plt.savefig(f"../results/solar_reduction_map_{year:02}.pdf", dpi=300)
+            plt.savefig(f"../results/{energy}_reduction_map_{year:02}.pdf", dpi=300)
 
         os.system(
-            "pdfunite ../results/solar_reduction_map_*.pdf ../results/solar_reduction_map.pdf"
+            f"pdfunite ../results/{energy}_reduction_map_*.pdf ../results/{energy}_reduction_map.pdf"
         )
-        os.system("rm ../results/solar_reduction_map_*.pdf")
+        os.system(f"rm ../results/{energy}_reduction_map_*.pdf")
 
 
 class waccm:
