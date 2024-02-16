@@ -207,7 +207,7 @@ class GEM:
 
         Arges:
             v (float): Wind speed in meters per second (m/s).
-            v_cut_in (float): Cut-in wind speed (m/s). Default is 3 m/s.
+            v_cut_in (float): Cut-in wind speed (m/s). Default is 0 m/s.
             v_rated (float): Rated wind speed (m/s). Default is 15 m/s.
             v_cut_out (float): Cut-out wind speed (m/s). Default is 25 m/s.
             P_rated (float): Max power.
@@ -225,43 +225,83 @@ class GEM:
             return 0
 
     @staticmethod
-    def get_power_time_series(lat, lon, power_type):
+    def get_solar_flux_time_series(lat, lon):
         """
-        Get the time series of wind or solar power output at a given location. The power is normalized by the
+        Get the time series of solar flux at a given location. The solar flux is normalized by the
+        baseline solar flux at the same location, so that 1 is the baseline and 0 is no solar flux.
+        The baseline is the average solar flux for each month for the last year of the simulation
+        (year 16).
+        Args:
+            lat (float): latitude
+            lon (float): longitude
+        Returns:
+            np.array: time
+            np.array: series of solar flux (1 is the baseline, 0 is no solar flux)
+            np.array: baseline values for each month
+        """
+        year_base = 16
+        var = "FSDS"
+        time = []
+        series = []
+        baseline_values = {}
+        for month in range(1, 13):
+            ref_data = waccm.get(var, year_base, month).isel(time=0)
+            ref_data_value = ref_data.sel(lat=lat, lon=lon, method="nearest")
+            baseline_values[month] = ref_data_value
+        for year in range(1, 16):
+            for month in range(1, 13):
+                time.append(waccm.months_since_nw(year, month))
+                data = waccm.get(var, year, month).isel(time=0)
+                data_value = data.sel(lat=lat, lon=lon, method="nearest")
+                ref_data_value = baseline_values[month]
+                series.append(data_value / ref_data_value)
+        time = np.array(time)
+        series = np.array(series)
+        baseline = np.array(list(baseline_values.values()))
+        baseline = baseline / baseline.sum()
+        return time, series, baseline
+
+    @staticmethod
+    def get_wind_power_time_series(lat, lon):
+        """
+        Get the time series of wind power at a given location. The power is normalized by the
         baseline power at the same location, so that 1 is the baseline and 0 is no power.
 
         Args:
             lat (float): latitude
             lon (float): longitude
-            power_type (str): type of power ("wind" or "solar")
 
         Returns:
             np.array: time
             np.array: series of power (1 is the baseline, 0 is no power)
             np.array: seasonal variation of power (baseline)
         """
-        if power_type == "wind":
-            var = "windspeed"
-        elif power_type == "solar":
-            var = "a2x3h_Faxa_swndr"
         time = []
         series = []
         baseline_values = {}
         lon = (lon + 360) % 360
+
+        # calculate baseline using control simulation an averaging over the years
+        # to get a more robust estimate of the seasonal cycle
         for month in range(1, 13):
-            year_base = 5
-            ref_data = waccmdaily.get(var, f"{year_base:02}-{month:02}", sim="control")
-            ref_data_value = ref_data.sel(a2x3h_ny=lat, a2x3h_nx=lon, method="nearest")
-            if power_type == "wind":
-                ref_data_value = GEM.wind_power_output(ref_data_value)
-            baseline_values[month] = ref_data_value
-        for year in range(1, 11):
+            monthly_power = []
+            for year in range(1, 11):
+                data = waccmwind.get(year, month, sim="control")
+                data_value = data.sel(
+                    a2x3h_ny=lat, a2x3h_nx=lon, method="nearest"
+                ).windspeed.values
+                power_output = GEM.wind_power_output(data_value) ## change this because I will use hourly-averaged averaged wind powrer
+                monthly_power.append(power_output)
+            baseline_values[month] = sum(monthly_power) / len(monthly_power)
+
+        for year in range(1, 14):
             for month in range(1, 13):
                 time.append(waccm.months_since_nw(year, month))
-                data = waccmdaily.get(var, f"{year:02}-{month:02}", sim="NW")
-                data_value = data.sel(a2x3h_ny=lat, a2x3h_nx=lon, method="nearest")
-                if power_type == "wind":
-                    data_value = GEM.wind_power_output(data_value)
+                data = waccmwind.get(year, month, sim="catastrophe")
+                data_value = data.sel(
+                    a2x3h_ny=lat, a2x3h_nx=lon, method="nearest"
+                ).windspeed.values
+                data_value = GEM.wind_power_output(data_value)  ## change this because I will use hourly-averaged averaged wind powrer
                 series.append(data_value / baseline_values[month])
         time = np.array(time)
         series = np.array(series)
@@ -278,6 +318,19 @@ class GEM:
         lon = row["Longitude"]
         capacity = row["Capacity (MW)"]
         time, series, baseline = self.get_solar_flux_time_series(lat, lon)
+        weighted_series = series * capacity
+        weighted_baseline = baseline * capacity
+        return weighted_series, weighted_baseline
+
+    def get_wind_power_for_farm(self, row):
+        """
+        Helper function to compute the wind power time series for a single wind farm.
+        This function will be called in parallel for each wind farm.
+        """
+        lat = row["Latitude"]
+        lon = row["Longitude"]
+        capacity = row["Capacity (MW)"]
+        time, series, baseline = self.get_wind_power_time_series(lat, lon)
         weighted_series = series * capacity
         weighted_baseline = baseline * capacity
         return weighted_series, weighted_baseline
@@ -319,6 +372,43 @@ class GEM:
         time, _, _ = self.get_solar_flux_time_series(0, 0)
         return time, country_aggregated_series, country_aggregated_baseline
 
+    def get_country_wind_power_time_series(self, country):
+        """
+        Average wind power variation compared to baseline for a given country.
+        We are averaging over the locations of all wind farms in the country,
+        weighted by their capacity.
+
+        Args:
+            country (str): country name
+
+        Returns:
+            np.array: time
+            np.array: country-aggregated series of wind power variation compared to baseline
+                (1 is the baseline, 0 is no wind power)
+        """
+        df = self.wind_farms[self.wind_farms.Country == country]
+        total_capacity = df["Capacity (MW)"].sum()
+        country_aggregated_series = np.zeros(156)
+        country_aggregated_baseline = np.zeros(12)
+
+        pbar = tqdm.tqdm(total=len(df))
+
+        with ProcessPoolExecutor() as executor:
+            futures = {
+                executor.submit(self.get_wind_power_for_farm, row): row["Capacity (MW)"]
+                for _, row in df.iterrows()
+            }
+
+            for future in as_completed(futures):
+                weighted_series, weighted_baseline = future.result()
+                country_aggregated_series += weighted_series / total_capacity
+                country_aggregated_baseline += weighted_baseline / total_capacity
+                pbar.update(1)
+        pbar.close()
+
+        time, _, _ = self.get_wind_power_time_series(0, 0)
+        return time, country_aggregated_series, country_aggregated_baseline
+
     def get_all_country_solar_power_time_series(
         self,
         output_csv1="../results/fraction_of_solar_power_countries.csv",
@@ -354,6 +444,66 @@ class GEM:
         for country in countries_to_process:
             print(f"Processing {country}...")
             time, series, baseline = self.get_country_solar_power_time_series(country)
+
+            # If this is the first country being processed, initialize DataFrame
+            if existing_df is None:
+                existing_df = pd.DataFrame(time, columns=["Months_after_NW"])
+                existing_df[country] = series
+            else:
+                existing_df[country] = series
+
+            # same with baseline
+            if existing_df_baseline is None:
+                existing_df_baseline = pd.DataFrame(
+                    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+                    columns=["Month_of_the_year"],
+                )
+                existing_df_baseline[country] = baseline
+            else:
+                existing_df_baseline[country] = baseline
+
+            # Write (or overwrite) the CSV file with updated data
+            existing_df.to_csv(output_csv1, index=False)
+            print(f"Saved {country} to {output_csv1}")
+
+            existing_df_baseline.to_csv(output_csv2, index=False)
+            print(f"Saved {country} to {output_csv2}")
+
+    def get_all_country_wind_power_time_series(
+        self,
+        output_csv1="../results/fraction_of_wind_power_countries.csv",
+        output_csv2="../results/baseline_seasonality_wind_power_countries.csv",
+    ):
+        """
+        Calculates the average wind power variation compared to baseline for all countries.
+
+        Output is saved to a CSV file.
+
+        Args:
+            output_csv1 (str): path to the output CSV file for the wind power variation
+            output_csv2 (str): path to the output CSV file for the baseline seasonality
+        """
+        # Sort countries alphabetically
+        countries = sorted(self.wind_farms["Country"].unique())
+
+        # Check if the output file already exists to determine where to resume
+        try:
+            existing_df = pd.read_csv(output_csv1)
+            existing_df_baseline = pd.read_csv(output_csv2)
+            completed_countries = existing_df.columns[1:]  # Exclude 'Time' column
+            countries_to_process = [
+                c for c in countries if c not in completed_countries
+            ]
+        except FileNotFoundError:
+            # If file does not exist, start from scratch
+            existing_df = None
+            existing_df_baseline = None
+            countries_to_process = countries
+
+        # Process each country
+        for country in countries_to_process:
+            print(f"Processing {country}...")
+            time, series, baseline = self.get_country_wind_power_time_series(country)
 
             # If this is the first country being processed, initialize DataFrame
             if existing_df is None:
@@ -933,198 +1083,83 @@ class waccm:
         return f"{formatted_lat}, {formatted_lon}"
 
 
-class waccmdaily:
+class waccmwind:
     """
     Used to access, process, and visualize simulation data produced by the Coupe et al. 2019
     nuclear winter simulation using the Whole Atmosphere Community Climate Model (WACCM).
 
-    This is for a version of the dataset that is not publicly available, which has a daily
-    resolution and includes wind data.
+    This class was made specifically to access the wind data, which is not available in the
+    publicly available version of the dataset. See the Climate-Data-Importing repo.
     """
 
-    wind_speed_cache = {}
-
     @staticmethod
-    def calculate_and_cache_wind_speed(year, ds):
-        """Calculate and cache the wind speed for a given year if not already cached."""
-        cache_key = f"windspeed_{year}"
-        if cache_key not in waccmdaily.wind_speed_cache:
-            u = ds["a2x3h_Sa_u"]
-            v = ds["a2x3h_Sa_v"]
-            wind_speed = np.sqrt(u**2 + v**2)
-            waccmdaily.wind_speed_cache[cache_key] = wind_speed
-        return waccmdaily.wind_speed_cache[cache_key]
-
-    @staticmethod
-    def get(variable, time, sim):
+    def get(year, month, sim):
         """
-        Retrieve data for a specific variable at a given time from an xarray dataset,
-        loading the dataset from a file based on the year in the time argument.
+        Retrieve wind data for a given year and month.
 
         Args:
-            variable (str): the name of the variable to retrieve
-            time (str): the time specification, which can be a specific time, a specific day, or a specific month
-                nuclear winter starts in May of year 1 (which is actually year 5 in the dataset)
-            sim (str): the simulation to retrieve the data from, either "control" or "NW"
+            year (int): year, where year 1 is the year of the nuclear war
+            month (int): month
+            sim (str): simulation name ("control" or "catastrophe")
 
         Returns:
-            xarray.DataArray or None: The requested data or None if the operation cannot be completed
+            xr.Dataset: wind data
         """
-        if not waccmdaily.verify_time_format(time):
-            print(
-                f"Invalid time format: {time}. Expected formats are 'YY-MM-DDTHH:MM:SS', 'YY-MM-DD', or 'YY-MM'."
-            )
-            return None
-
-        # adjust year by adding 4 to YY in time
-        original_year = int(time[:2])
-        year = original_year + 4
-        year = str(year).zfill(2)
-        full_time_str = (
-            f"{year}{time[2:]}"  # Reconstruct the full time string with adjusted year
-        )
-        file_path = os.path.join("..", "data", "daily", f"year{year}.nc")
-
-        try:
-            ds = xr.open_dataset(file_path)
-
-            # For windspeed, check if it's already calculated and cached for the year
-            if variable == "windspeed":
-                ds["windspeed"] = waccmdaily.calculate_and_cache_wind_speed(year, ds)
-
-            full_time_str = f"00{full_time_str}"
-            if len(time) == 8:  # Specific day
-                data = ds[variable].sel(time=full_time_str).mean(dim="time")
-            elif len(time) == 5:  # Specific month
-                data = (
-                    ds[variable]
-                    .sel(time=full_time_str)
-                    .resample(time="ME")
-                    .mean()
-                    .isel(time=0)
-                )
-            elif len(time) > 8:  # Specific time
-                data = ds[variable].sel(time=full_time_str).isel(time=0)
-
-            latitude = np.linspace(-90, 90, data.shape[0])
-            longitude = np.linspace(0, 360, data.shape[1], endpoint=False)
-            data = data.assign_coords(a2x3h_ny=("a2x3h_ny", latitude), a2x3h_nx=("a2x3h_nx", longitude))
-
-            return data
-
-        except KeyError:
-            print(f"Variable '{variable}' not found in the dataset.")
-            return None
-        except ValueError as e:
-            print(f"Error processing time '{time}': {e}")
-            return None
-        finally:
-            if "ds" in locals():
-                ds.close()
+        year = year + 4
+        filepath = f"../data/wind-data/windspeed_{sim}_{year:02}.nc"
+        ds = xr.open_dataset(filepath)
+        return ds.sel(time=f"{year:04}-{month:02}").isel(time=0)
 
     @staticmethod
-    def verify_time_format(time_str):
+    def plot_map(year, month, sim, zmin=None, zmax=None, var="windpower"):
         """
-        Verify the format of the input time string.
+        Plot wind data for a given year and month on a map.
 
         Args:
-            time_str (str): The time string to be verified.
-
-        Returns:
-            bool: True if the time string matches any of the allowed formats, False otherwise.
-
-        Expected formats are 'YY-MM-DDTHH:MM:SS', 'YY-MM-DD', or 'YY-MM'.
-        """
-        specific_time_pattern = r"^\d{2}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$"
-        specific_day_pattern = r"^\d{2}-\d{2}-\d{2}$"
-        specific_month_pattern = r"^\d{2}-\d{2}$"
-
-        if (
-            re.match(specific_time_pattern, time_str)
-            or re.match(specific_day_pattern, time_str)
-            or re.match(specific_month_pattern, time_str)
-        ):
-            return True
-        else:
-            return False
-
-    @staticmethod
-    def label(var):
-        """
-        Get a label for a given variable.
-
-        Args:
-            var (str): variable name
-
-        Returns:
-            str: label
-        """
-        if var == "a2x3h_Sa_u":
-            return "Eastward wind (m/s)"
-        elif var == "a2x3h_Sa_v":
-            return "Northward wind (m/s)"
-        elif var == "a2x3h_Sa_tbot":
-            return "Surface temperature (K)"
-        elif var == "a2x3h_Sa_shum":
-            return "Specific humidity (kg/kg)"
-        elif var == "a2x3h_Sa_pbot":
-            return "Surface pressure (Pa)"
-        elif var == "a2x3h_Faxa_rainc":
-            return "Convective precipitation rate (m/s)"
-        elif var == "a2x3h_Faxa_rainl":
-            return "Large-scale precipitation rate (m/s)"
-        elif var == "a2x3h_Faxa_swndr":
-            return "Downward solar radiation flux (W/m²)"
-        elif var == "a2x3h_Faxa_swvdr":
-            return "Downward visible solar radiation flux (W/m²)"
-        elif var == "a2x3h_Faxa_swndf":
-            return "Downward near-infrared solar radiation flux (W/m²)"
-        elif var == "a2x3h_Faxa_swvdf":
-            return "Downward visible near-infrared solar radiation flux (W/m²)"
-        elif var == "windspeed":
-            return "Wind speed (m/s)"
-        else:
-            return var
-
-    @staticmethod
-    def plot_map(var, time, zmin=None, zmax=None):
-        """
-        Plot data for a given variable at a given time on a map.
-
-        Args:
-            var (str): variable name
-            time (str): time specification, which can be a specific time, a specific day, or a specific month
-            zmax (float): maximum value for the color scale
+            year (int): year, where year 1 is the year of the nuclear war
+            month (int): month
+            sim (str): simulation name ("control" or "catastrophe")
             zmin (float): minimum value for the color scale
+            zmax (float): maximum value for the color scale
         """
-        data = waccmdaily.get(var, time)
+        data = waccmwind.get(year, month, sim)
         if data is not None:
             fig, ax = plt.subplots(
                 figsize=(10, 6), subplot_kw={"projection": ccrs.PlateCarree()}
             )
             ax.coastlines()
 
-            cmap = "plasma" if var == "windspeed" else "viridis"
+            if var == "windpower":
+                z = data.windpower
+                label = "Wind power (normalized)"
+            elif var == "windspeed":
+                z = data.windspeed
+                label = "Wind speed (m/s)"
 
             cf = ax.pcolormesh(
-                data.lon,
-                data.lat,
-                data.values,
+                data.a2x3h_nx,
+                data.a2x3h_ny,
+                z,
                 shading="auto",
                 transform=ccrs.PlateCarree(),
-                cmap=cmap,
+                cmap="plasma",
                 vmin=zmin,
                 vmax=zmax,
             )
 
-            if len(time) == 5:
-                month = int(time[3:5])
-                year = int(time[:2])
+            if sim == "control":
                 plt.title(
-                    f"{waccmdaily.label(var)} in {waccm.month_name(month)} of Year {year} ({waccm.months_since_nw(year, month)} months since nuclear war)"
+                    f"{label} in {waccm.month_name(month)} of Year {year} (control simulation)"
                 )
             else:
-                plt.title(f"{waccmdaily.label(var)} at {time}")
+                if waccm.months_since_nw(year, month) < 0:
+                    plt.title(
+                        f"{label} in {waccm.month_name(month)} of Year {year} ({-waccm.months_since_nw(year, month)} months before nuclear war)"
+                    )
+                else:
+                    plt.title(
+                        f"{label} in {waccm.month_name(month)} of Year {year} ({waccm.months_since_nw(year, month)} months since nuclear war)"
+                    )
 
             # Adjust colorbar to match the plot height
             cbar = plt.colorbar(
@@ -1132,7 +1167,7 @@ class waccmdaily:
                 ax=ax,
                 shrink=0.7,
                 orientation="vertical",
-                label=waccmdaily.label(var),
+                label=label,
             )
 
             plt.tight_layout()
