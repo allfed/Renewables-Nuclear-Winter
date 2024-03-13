@@ -168,7 +168,7 @@ class GEM:
         for month in range(1, 13):
             monthly_power = []
             for year in range(1, 11):
-                data = waccmwind.get(year, month, sim="control", var="windpower")
+                data = waccmwind.get(year, month, sim="control", var="windpower_simple")
                 power_output = data.sel(
                     a2x3h_ny=lat, a2x3h_nx=lon, method="nearest"
                 ).windpower.values
@@ -178,7 +178,7 @@ class GEM:
         for year in range(1, 14):
             for month in range(1, 13):
                 time.append(waccm.months_since_nw(year, month))
-                data = waccmwind.get(year, month, sim="catastrophe", var="windpower")
+                data = waccmwind.get(year, month, sim="catastrophe", var="windpower_simple")
                 data_value = data.sel(
                     a2x3h_ny=lat, a2x3h_nx=lon, method="nearest"
                 ).windpower.values
@@ -270,8 +270,8 @@ class GEM:
         Args:
             energy (str): "solar" or "wind"
         """
-        output_csv1 = f"../results/fraction_of_{energy}_power_countries.csv"
-        output_csv2 = f"../results/baseline_seasonality_{energy}_power_countries.csv"
+        output_csv1 = f"../results/fraction_of_{energy}_power_simple_countries.csv"
+        output_csv2 = f"../results/baseline_seasonality_{energy}_power_simple_countries.csv"
         gem_df = self.solar_farms if energy == "solar" else self.wind_farms
 
         # Sort countries alphabetically
@@ -919,7 +919,7 @@ class waccmwind:
             )
             ax.coastlines()
 
-            if var == "windpower":
+            if var == "windpower" or var == "windpower_simple":
                 z = data.windpower
                 label = "Wind power (normalized)"
             elif var == "windspeed":
