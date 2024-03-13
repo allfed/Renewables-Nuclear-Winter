@@ -178,7 +178,9 @@ class GEM:
         for year in range(1, 14):
             for month in range(1, 13):
                 time.append(waccm.months_since_nw(year, month))
-                data = waccmwind.get(year, month, sim="catastrophe", var="windpower_simple")
+                data = waccmwind.get(
+                    year, month, sim="catastrophe", var="windpower_simple"
+                )
                 data_value = data.sel(
                     a2x3h_ny=lat, a2x3h_nx=lon, method="nearest"
                 ).windpower.values
@@ -271,7 +273,9 @@ class GEM:
             energy (str): "solar" or "wind"
         """
         output_csv1 = f"../results/fraction_of_{energy}_power_simple_countries.csv"
-        output_csv2 = f"../results/baseline_seasonality_{energy}_power_simple_countries.csv"
+        output_csv2 = (
+            f"../results/baseline_seasonality_{energy}_power_simple_countries.csv"
+        )
         gem_df = self.solar_farms if energy == "solar" else self.wind_farms
 
         # Sort countries alphabetically
@@ -319,6 +323,49 @@ class GEM:
 
             existing_df_baseline.to_csv(output_csv2, index=False)
             print(f"Saved {country} to {output_csv2}")
+
+    def postprocess_aggregate_yearly(self, fraction_csv, baseline_csv, energy):
+        """
+        Aggregates data yearly to get the total power reduction time series for each country
+        using a yearly average, where seasonality is taken into consideration.
+
+        Args:
+            fraction_csv (str): path to the CSV file containing the fraction of power over time,
+                created by get_all_country_solar_power_time_series
+            baseline_csv (str): path to the CSV file containing the baseline seasonality,
+                created by get_all_country_solar_power_time_series
+            energy (str): "solar" or "wind"
+
+        Returns:
+            None, but displays a plot
+        """
+        fraction_df = pd.read_csv(fraction_csv)
+        baseline_df = pd.read_csv(baseline_csv)
+        countries = list(fraction_df.columns[1:])
+        new_df = pd.DataFrame(columns=["Year", "Country", "Fraction"])
+        for country in countries:
+            year_total = 0
+            imonth = 0
+            iyear = 0
+            for month in range(len(fraction_df[country])):
+                year_total += (
+                    fraction_df[country][imonth] * baseline_df[country][imonth % 12]
+                )
+                imonth += 1
+                if imonth % 12 == 0:
+                    new_row = pd.DataFrame(
+                        {
+                            "Year": [iyear],
+                            "Country": [country],
+                            "Fraction": [year_total],
+                        }
+                    )
+                    new_df = pd.concat([new_df, new_row], ignore_index=True)
+                    year_total = 0
+                    iyear += 1
+        new_df.to_csv(f"../results/aggregate_yearly_{energy}_power.csv", index=False)
+        setattr(self, f"{energy}_yearly", new_df)
+        return
 
     def postprocess_aggregate_countries(self, input_csv, energy):
         """
