@@ -12,7 +12,9 @@ import numpy as np
 import pandas as pd
 import tqdm
 import xarray as xr
-
+import geopy
+from geopy.geocoders import Nominatim
+from shapely.geometry import Point, Polygon
 
 plt.style.use(
     "https://raw.githubusercontent.com/allfed/ALLFED-matplotlib-style-sheet/main/ALLFED.mplstyle"
@@ -209,6 +211,67 @@ class GEM:
         weighted_baseline = baseline * capacity
         return weighted_series, weighted_baseline
 
+    @staticmethod
+    def generate_random_locations(country_name, num_locations):
+        """
+        Generates a pandas DataFrame containing random locations within a country's bounding box.
+
+        Args:
+            country_name (str): The name of the country.
+            num_locations (int): The number of random locations to generate.
+
+        Returns:
+            pandas.DataFrame: A DataFrame with columns 'latitude' and 'longitude'.
+        """
+
+        # Initialize geolocator
+        geolocator = Nominatim(user_agent="my_application")
+
+        # Get country boundaries
+        location = geolocator.geocode(country_name)
+        if location is None:
+            raise ValueError(f"Invalid country name: {country_name}")
+        country_polygon = location.raw[
+            "boundingbox"
+        ]  # Extract bounding box coordinates
+        polygon = Polygon(
+            [
+                (float(country_polygon[2]), float(country_polygon[0])),  # West, South
+                (float(country_polygon[2]), float(country_polygon[1])),  # West, North
+                (float(country_polygon[3]), float(country_polygon[1])),  # East, North
+                (float(country_polygon[3]), float(country_polygon[0])),  # East, South
+                (
+                    float(country_polygon[2]),
+                    float(country_polygon[0]),
+                ),  # Close polygon (back to start)
+            ]
+        )
+
+        # Generate random points within the polygon
+        data = []
+        while len(data) < num_locations:
+            x = (
+                min(polygon.bounds[0], polygon.bounds[2])
+                + (
+                    max(polygon.bounds[0], polygon.bounds[2])
+                    - min(polygon.bounds[0], polygon.bounds[2])
+                )
+                * np.random.random()
+            )
+            y = (
+                min(polygon.bounds[1], polygon.bounds[3])
+                + (
+                    max(polygon.bounds[1], polygon.bounds[3])
+                    - min(polygon.bounds[1], polygon.bounds[3])
+                )
+                * np.random.random()
+            )
+            point = Point(x, y)
+            if polygon.contains(point):
+                data.append({"Latitude": y, "Longitude": x, "Capacity (MW)": 1})
+
+        return pd.DataFrame(data)
+
     def get_country_power_time_series(self, country, energy):
         """
         Average solar/wind power variation compared to baseline for a given country.
@@ -225,11 +288,23 @@ class GEM:
                 (1 is the baseline, 0 is no solar power)
         """
         if energy == "solar":
-            df = self.solar_farms[self.solar_farms.Country == country]
-            country_aggregated_series = np.zeros(180)
+            try:  # get location of actual solar farms
+                df = self.solar_farms[self.solar_farms.Country == country]
+                country_aggregated_series = np.zeros(180)
+                if df.empty:
+                    raise ValueError(f"No solar farms found in {country}")
+            except:  # if that fails, get random location in the country
+                df = self.generate_random_locations(country, 100)
+                country_aggregated_series = np.zeros(180)
         elif energy == "wind":
-            df = self.wind_farms[self.wind_farms.Country == country]
-            country_aggregated_series = np.zeros(156)
+            try:
+                df = self.wind_farms[self.wind_farms.Country == country]
+                country_aggregated_series = np.zeros(156)
+                if df.empty:
+                    raise ValueError(f"No wind farms found in {country}")
+            except:
+                df = self.generate_random_locations(country, 100)
+                country_aggregated_series = np.zeros(156)
         else:
             raise ValueError("energy must be 'solar' or 'wind'")
 
@@ -273,13 +348,87 @@ class GEM:
             energy (str): "solar" or "wind"
         """
         output_csv1 = f"../results/fraction_of_{energy}_power_simple_countries.csv"
-        output_csv2 = (
-            f"../results/baseline_seasonality_{energy}_power_simple_countries.csv"
-        )
+        output_csv2 = f"../results/baseline_seasonality_{energy}_power_simple_countries.csv"
         gem_df = self.solar_farms if energy == "solar" else self.wind_farms
 
         # Sort countries alphabetically
         countries = sorted(gem_df["Country"].unique())
+
+        # Add a few countries that are not in the dataset
+        if energy == "solar":
+            countries.extend(
+                [
+                    "Brunei Darussalam",
+                    "Cote d'Ivoire",
+                    "Iceland",
+                    "Luxembourg",
+                    "Malta",
+                    "Moldova",
+                    "Norway",
+                    "Slovenia",
+                    "Sudan",
+                    "Switzerland",
+                    "Tajikistan",
+                    "Tanzania, United Republic",
+                    "Turkmenistan",
+                    "Venezuela",
+                    "Papua New Guinea",
+                    "The Gambia",
+                    "Swaziland",
+                ]
+            )
+        elif energy == "wind":
+            countries.extend(
+                [
+                    "Armenia",
+                    "Bahrain",
+                    "Benin",
+                    "Botswana",
+                    "Brunei Darussalam",
+                    "Cambodia",
+                    "Congo",
+                    "Democratic Republic of the Congo",
+                    "Cote d'Ivoire",
+                    "Eritrea",
+                    "Gabon",
+                    "Haiti",
+                    "Iceland",
+                    "North Korea",
+                    "Lybia",
+                    "Malaysia",
+                    "Malta",
+                    "Moldova",
+                    "Nepal",
+                    "Paraguay",
+                    "Qatar",
+                    "Syria",
+                    "Tajikistan",
+                    "Tanazania, United Republic",
+                    "Togo",
+                    "Trinidad and Tobago",
+                    "Turkmenistan",
+                    "Venezuela",
+                    "Papua New Guinea",
+                    "Somalia",
+                    "Pakistan",
+                    "Lybia",
+                    "Central African Republic",
+                    "Suriname",
+                    "The Gambia",
+                    "Guinea-Bissau",
+                    "Guinea",
+                    "Liberia",
+                    "Sierra Leone",
+                    "Burkina Faso",
+                    "Burundi",
+                    "Lesotho",
+                    "Swaziland",
+                    "Afghanistan",
+                    "South Sudan",
+                    "Rwanda",
+                    "Ghana",
+                ]
+            )
 
         # Check if the output file already exists to determine where to resume
         try:
@@ -363,7 +512,7 @@ class GEM:
                     new_df = pd.concat([new_df, new_row], ignore_index=True)
                     year_total = 0
                     iyear += 1
-        new_df.to_csv(f"../results/aggregate_yearly_{energy}_power.csv", index=False)
+        new_df.to_csv(f"../results/aggregate_yearly_{energy}_power_simple.csv", index=False)
         setattr(self, f"{energy}_yearly", new_df)
         return
 
