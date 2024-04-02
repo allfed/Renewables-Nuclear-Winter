@@ -214,7 +214,7 @@ class GEM:
     @staticmethod
     def generate_random_locations(country_name, num_locations):
         """
-        Generates a pandas DataFrame containing random locations within a country's bounding box.
+        Generates a pandas DataFrame containing random locations within a country's land area.
 
         Args:
             country_name (str): The name of the country.
@@ -224,6 +224,10 @@ class GEM:
             pandas.DataFrame: A DataFrame with columns 'latitude' and 'longitude'.
         """
 
+        # Fetch land polygons (for reference)
+        world = gpd.read_file(gpd.datasets.get_path("naturalearth_lowres"))
+        land = world[world.continent != "Antarctica"]
+
         # Initialize geolocator
         geolocator = Nominatim(user_agent="my_application")
 
@@ -231,43 +235,45 @@ class GEM:
         location = geolocator.geocode(country_name)
         if location is None:
             raise ValueError(f"Invalid country name: {country_name}")
-        country_polygon = location.raw[
-            "boundingbox"
-        ]  # Extract bounding box coordinates
-        polygon = Polygon(
-            [
-                (float(country_polygon[2]), float(country_polygon[0])),  # West, South
-                (float(country_polygon[2]), float(country_polygon[1])),  # West, North
-                (float(country_polygon[3]), float(country_polygon[1])),  # East, North
-                (float(country_polygon[3]), float(country_polygon[0])),  # East, South
-                (
-                    float(country_polygon[2]),
-                    float(country_polygon[0]),
-                ),  # Close polygon (back to start)
-            ]
-        )
 
-        # Generate random points within the polygon
+        # Fetch precise country polygon
+        countries = gpd.read_file(gpd.datasets.get_path("naturalearth_lowres"))
+        if country_name == "Democratic Republic of the Congo":
+            country_name = "Dem. Rep. Congo"
+        if country_name == "Cote d'Ivoire":
+            country_name = "Côte d'Ivoire"
+        if country_name == "Brunei Darussalam":
+            country_name = "Brunei"
+        if country_name == "Lybia":
+            country_name = "Libya"
+        if country_name == "Tanazania, United Republic":
+            country_name = "Tanzania"
+        if country_name == "Central African Republic":
+            country_name = "Central African Rep."
+        if country_name == "The Gambia":
+            country_name = "Gambia"
+        if country_name == "Swaziland":
+            country_name = "eSwatini"
+        if country_name == "South Sudan":
+            country_name = "S. Sudan"
+        country_polygon = countries[countries.name == country_name].geometry.iloc[0]
+
+        # Generate random points, filtering for land
         data = []
         while len(data) < num_locations:
-            x = (
-                min(polygon.bounds[0], polygon.bounds[2])
-                + (
-                    max(polygon.bounds[0], polygon.bounds[2])
-                    - min(polygon.bounds[0], polygon.bounds[2])
-                )
-                * np.random.random()
+            x = generate_random_coordinate(
+                country_polygon.bounds[0], country_polygon.bounds[2]
             )
-            y = (
-                min(polygon.bounds[1], polygon.bounds[3])
-                + (
-                    max(polygon.bounds[1], polygon.bounds[3])
-                    - min(polygon.bounds[1], polygon.bounds[3])
-                )
-                * np.random.random()
+            y = generate_random_coordinate(
+                country_polygon.bounds[1], country_polygon.bounds[3]
             )
             point = Point(x, y)
-            if polygon.contains(point):
+
+            if (
+                country_polygon.contains(point)
+                and land.geometry.contains(point).any()
+                and y < 65
+            ):
                 data.append({"Latitude": y, "Longitude": x, "Capacity (MW)": 1})
 
         return pd.DataFrame(data)
@@ -347,8 +353,8 @@ class GEM:
         Args:
             energy (str): "solar" or "wind"
         """
-        output_csv1 = f"../results/fraction_of_{energy}_power_simple_countries.csv"
-        output_csv2 = f"../results/baseline_seasonality_{energy}_power_simple_countries.csv"
+        output_csv1 = f"../results/fraction_of_{energy}_power_countries.csv"
+        output_csv2 = f"../results/baseline_seasonality_{energy}_power_countries.csv"
         gem_df = self.solar_farms if energy == "solar" else self.wind_farms
 
         # Sort countries alphabetically
@@ -356,79 +362,77 @@ class GEM:
 
         # Add a few countries that are not in the dataset
         if energy == "solar":
-            countries.extend(
-                [
-                    "Brunei Darussalam",
-                    "Cote d'Ivoire",
-                    "Iceland",
-                    "Luxembourg",
-                    "Malta",
-                    "Moldova",
-                    "Norway",
-                    "Slovenia",
-                    "Sudan",
-                    "Switzerland",
-                    "Tajikistan",
-                    "Tanzania, United Republic",
-                    "Turkmenistan",
-                    "Venezuela",
-                    "Papua New Guinea",
-                    "The Gambia",
-                    "Swaziland",
-                ]
-            )
+            missing_countries = [
+                "Brunei Darussalam",
+                # "Cote d'Ivoire",
+                "Iceland",
+                "Luxembourg",
+                # "Malta",
+                "Moldova",
+                "Norway",
+                "Slovenia",
+                "Sudan",
+                "Switzerland",
+                "Tajikistan",
+                "Tanzania",
+                "Turkmenistan",
+                "Venezuela",
+                "Papua New Guinea",
+                "The Gambia",
+                "Swaziland",
+            ]
+            countries.extend(missing_countries)
         elif energy == "wind":
-            countries.extend(
-                [
-                    "Armenia",
-                    "Bahrain",
-                    "Benin",
-                    "Botswana",
-                    "Brunei Darussalam",
-                    "Cambodia",
-                    "Congo",
-                    "Democratic Republic of the Congo",
-                    "Cote d'Ivoire",
-                    "Eritrea",
-                    "Gabon",
-                    "Haiti",
-                    "Iceland",
-                    "North Korea",
-                    "Lybia",
-                    "Malaysia",
-                    "Malta",
-                    "Moldova",
-                    "Nepal",
-                    "Paraguay",
-                    "Qatar",
-                    "Syria",
-                    "Tajikistan",
-                    "Tanazania, United Republic",
-                    "Togo",
-                    "Trinidad and Tobago",
-                    "Turkmenistan",
-                    "Venezuela",
-                    "Papua New Guinea",
-                    "Somalia",
-                    "Pakistan",
-                    "Lybia",
-                    "Central African Republic",
-                    "Suriname",
-                    "The Gambia",
-                    "Guinea-Bissau",
-                    "Guinea",
-                    "Liberia",
-                    "Sierra Leone",
-                    "Burkina Faso",
-                    "Burundi",
-                    "Lesotho",
-                    "Swaziland",
-                    "Afghanistan",
-                    "South Sudan",
-                    "Rwanda",
-                    "Ghana",
-                ]
-            )
+            missing_countries = [
+                "Armenia",
+                # "Bahrain",
+                "Benin",
+                "Botswana",
+                "Brunei Darussalam",
+                "Cambodia",
+                "Congo",
+                "Democratic Republic of the Congo",
+                "Cote d'Ivoire",
+                "Eritrea",
+                "Gabon",
+                "Haiti",
+                "Iceland",
+                "North Korea",
+                "Lybia",
+                "Malaysia",
+                # "Malta",
+                "Moldova",
+                "Nepal",
+                "Paraguay",
+                "Qatar",
+                "Syria",
+                "Tajikistan",
+                "Tanazania, United Republic",
+                "Togo",
+                "Trinidad and Tobago",
+                "Turkmenistan",
+                "Venezuela",
+                "Papua New Guinea",
+                "Somalia",
+                "Pakistan",
+                "Lybia",
+                "Central African Republic",
+                "Suriname",
+                "The Gambia",
+                "Guinea-Bissau",
+                "Guinea",
+                "Liberia",
+                "Sierra Leone",
+                "Burkina Faso",
+                "Burundi",
+                "Lesotho",
+                "Swaziland",
+                "Afghanistan",
+                "South Sudan",
+                "Rwanda",
+                "Ghana",
+            ]
+            countries.extend(missing_countries)
 
         # Check if the output file already exists to determine where to resume
         try:
@@ -512,7 +516,7 @@ class GEM:
                     new_df = pd.concat([new_df, new_row], ignore_index=True)
                     year_total = 0
                     iyear += 1
-        new_df.to_csv(f"../results/aggregate_yearly_{energy}_power_simple.csv", index=False)
+        new_df.to_csv(f"../results/aggregate_yearly_{energy}_power.csv", index=False)
         setattr(self, f"{energy}_yearly", new_df)
         return
 
@@ -577,9 +581,9 @@ class GEM:
                     baseline = baseline_csv[col].to_numpy()
                     reduction = np.dot(fraction, baseline)
                     country_dict[col] = reduction * 100
-
             name_mapping = {
                 "United States": "United States of America",
+                "Democratic Republic of the Congo": "Dem. Rep. Congo",
                 "DR Congo": "Dem. Rep. Congo",
                 "Republic of the Congo": "Congo",
                 "Dominican Republic": "Dominican Rep.",
@@ -588,6 +592,8 @@ class GEM:
                 "Central African Republic": "Central African Rep.",
                 "Czech Republic": "Czechia",
                 "Bosnia and Herzegovina": "Bosnia and Herz.",
+                "Lybia": "Libya",
+                #"Côte d'Ivoire": "Cote d'Ivoire",
             }
             country_dict = {name_mapping.get(k, k): v for k, v in country_dict.items()}
 
@@ -1158,3 +1164,17 @@ class waccmwind:
 
             plt.tight_layout()
             plt.show()
+
+
+def get_bounding_polygon(bbox):
+    return [
+        (float(bbox[2]), float(bbox[0])),  # West, South
+        (float(bbox[2]), float(bbox[1])),  # West, North
+        (float(bbox[3]), float(bbox[1])),  # East, North
+        (float(bbox[3]), float(bbox[0])),  # East, South
+        (float(bbox[2]), float(bbox[0])),  # Close polygon
+    ]
+
+
+def generate_random_coordinate(min_bound, max_bound):
+    return min_bound + (max_bound - min_bound) * np.random.random()
