@@ -387,6 +387,7 @@ class GEM:
                 "Armenia",
                 # "Bahrain",
                 "Benin",
+                "Bhutan",
                 "Botswana",
                 "Brunei Darussalam",
                 "Cambodia",
