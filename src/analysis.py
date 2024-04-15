@@ -661,6 +661,8 @@ class waccm:
             f"../data/nw_ur_150_07_mini/nw_ur_150_07.cam.h0.{year}-{month}.nc",
             chunks={} if use_dask else None,  # Use Dask for chunking if requested
         )
+        if var == "total_precip":
+            return (ds["PRECC"] + ds["PRECL"]) * 1000 * 30 * 24 * 3600
         return ds[var]
 
     @staticmethod
@@ -702,22 +704,9 @@ class waccm:
             return ans / 3
 
         if isinstance(month, str):  # season
-            if var == "total_precip":
-                # Construct 'total_precip' from 'PRECC' and 'PRECL'
-                toplot = calculate_seasonal_average(
-                    "PRECC", year, month
-                ) + calculate_seasonal_average("PRECL", year, month)
-            else:
-                toplot = calculate_seasonal_average(var, year, month)
+            toplot = calculate_seasonal_average(var, year, month)
         else:  # single month
-            if var == "total_precip":  # total precipitation
-                toplot = waccm.get("PRECC", year, month) + waccm.get(
-                    "PRECL", year, month
-                )
-            else:
-                toplot = waccm.get(var, year, month)
-        if var == "total_precip":
-            toplot = 1000 * 30 * 24 * 3600 * toplot
+            toplot = waccm.get(var, year, month)
         if var == "T":
             toplot = toplot - 273.15
         if lev is not None:
@@ -935,6 +924,7 @@ class waccm:
         ax.coastlines()
         for lat_val, lon_val in zip(lat, lon):
             ax.plot(lon_val, lat_val, "o", markersize=5, transform=ccrs.Geodetic())
+            ax.set_extent([lon_val - 20, lon_val + 20, lat_val - 20, lat_val + 20])
         plt.show()
 
     @staticmethod
