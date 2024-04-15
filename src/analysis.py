@@ -594,7 +594,7 @@ class GEM:
                 "Czech Republic": "Czechia",
                 "Bosnia and Herzegovina": "Bosnia and Herz.",
                 "Lybia": "Libya",
-                #"Côte d'Ivoire": "Cote d'Ivoire",
+                # "Côte d'Ivoire": "Cote d'Ivoire",
             }
             country_dict = {name_mapping.get(k, k): v for k, v in country_dict.items()}
 
@@ -664,37 +664,99 @@ class waccm:
         return ds[var]
 
     @staticmethod
-    def plot_map(var, year, month, lev=None):
+    def plot_map(
+        var, year, month, lev=None, region="world", vmin=None, vmax=None, save=False
+    ):
         """
-        Plot data for a given variable, year, and month on a map.
+        Plot data for a given variable, year, and month on a map. Can calculate and plot seasonal averages.
 
         Args:
             var (str): variable name
             year (int): year
-            month (int): month
+            month (int or str): month number or season name (DJF, MAM, JJA, SON)
             lev (float): level to plot (hPa)
+            region (str): region to plot
+            vmin (float): minimum value for the color scale
+            vmax (float): maximum value for the color scale
+            save (bool): whether to save the plot
         """
-        toplot = waccm.get(var, year, month)
+        plt.figure()
+        months_dict = {
+            "DJF": [12, 1, 2],
+            "MAM": [3, 4, 5],
+            "JJA": [6, 7, 8],
+            "SON": [9, 10, 11],
+        }
+
+        def calculate_seasonal_average(var, year, season):
+            """Calculates seasonal average for the given variable, adjusting year for December."""
+            months = months_dict[season]
+            for m in months:
+                y = year if m != 12 else year - 1  # Adjust year for December
+                try:
+                    ans = ans + waccm.get(var, y, m).isel(
+                        time=0
+                    )  # Add data for each month
+                except NameError:
+                    ans = waccm.get(var, y, m).isel(time=0)
+            return ans / 3
+
+        if isinstance(month, str):  # season
+            if var == "total_precip":
+                # Construct 'total_precip' from 'PRECC' and 'PRECL'
+                toplot = calculate_seasonal_average(
+                    "PRECC", year, month
+                ) + calculate_seasonal_average("PRECL", year, month)
+            else:
+                toplot = calculate_seasonal_average(var, year, month)
+        else:  # single month
+            if var == "total_precip":  # total precipitation
+                toplot = waccm.get("PRECC", year, month) + waccm.get(
+                    "PRECL", year, month
+                )
+            else:
+                toplot = waccm.get(var, year, month)
+        if var == "total_precip":
+            toplot = 1000 * 30 * 24 * 3600 * toplot
+        if var == "T":
+            toplot = toplot - 273.15
         if lev is not None:
             # find closest level
             lev = toplot.lev.sel(lev=lev, method="nearest")
             print(f"Level: {lev.values} hPa")
             toplot = toplot.sel(lev=lev)
-        toplot_cyclic, lon_cyclic = add_cyclic_point(
-            toplot.isel(time=0), coord=toplot.lon
-        )
+        if isinstance(month, str):
+            toplot_cyclic, lon_cyclic = add_cyclic_point(toplot, coord=toplot.lon)
+        else:
+            toplot_cyclic, lon_cyclic = add_cyclic_point(
+                toplot.isel(time=0), coord=toplot.lon
+            )
         ax = plt.axes(projection=ccrs.PlateCarree())
         ax.coastlines()
         cbar = "viridis"
         if var == "CRSOOTMR":
             cbar = "pink_r"
+        if var == "total_precip" or var == "PRECC" or var == "PRECL":
+            cbar = "BrBG"
+        if var == "T":
+            cbar = "coolwarm"
+        # apply region mask
+        if region == "europe":
+            toplot = toplot.sel(lat=slice(30, 70), lon=slice(-20, 40))
+        elif region == "north_america":
+            toplot = toplot.sel(lat=slice(20, 60), lon=slice(-140, -60))
+        elif region == "australia":
+            toplot = toplot.sel(lat=slice(-45, -10), lon=slice(110, 160))
+        elif region == "south_america":
+            toplot = toplot.sel(lat=slice(-60, 20), lon=slice(-90, -30))
+        toplot_cyclic, lon_cyclic = add_cyclic_point(toplot, coord=toplot.lon)
         contour = ax.contourf(
             lon_cyclic,
             toplot.lat,
             toplot_cyclic,
             transform=ccrs.PlateCarree(),
             cmap=cbar,
-            levels=16,
+            levels=np.linspace(vmin, vmax, 16) if vmin is not None else 21,
         )
         plt.colorbar(
             contour,
@@ -702,10 +764,15 @@ class waccm:
             orientation="vertical",
             label=waccm.label(var),
         )
+        month_or_season = waccm.month_name(month) if isinstance(month, int) else month
+        month_middle = months_dict[month][1] if isinstance(month, str) else month
         plt.title(
-            f"{waccm.month_name(month)} of Year {year} ({waccm.months_since_nw(year, month)} months since nuclear war)"
+            f"{month_or_season} of Year {year} ({waccm.months_since_nw(year, month_middle)} months since nuclear war)"
         )
         plt.tight_layout()
+        if save:
+            year = str(year).zfill(2)
+            plt.savefig(f"../tmp/{var}_{year}_{month}.pdf")
 
     @staticmethod
     def plot_map_diff(var, year, month, year_base=16, relative=False, lev=None):
@@ -925,7 +992,7 @@ class waccm:
                 else "Relative humidity (%)"
             )
         elif var == "T":
-            return "Change in temperature (%)" if relative else "Temperature (K)"
+            return "Change in temperature (%)" if relative else "Temperature (°C)"
         elif var == "Z3":
             return (
                 "Change in geopotential height (%)"
@@ -949,6 +1016,12 @@ class waccm:
                 "Change in soot effective radius (%)"
                 if relative
                 else "Soot effective radius (um)"
+            )
+        elif var == "total_precip":
+            return (
+                "Change in total precipitation rate (%)"
+                if relative
+                else "Precipitation (mm/month)"
             )
         else:
             return var
@@ -976,7 +1049,7 @@ class waccm:
             "September",
             "October",
             "November",
-            "Decemeber",
+            "December",
         ][month_number - 1]
 
     @staticmethod

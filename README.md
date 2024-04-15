@@ -2,7 +2,7 @@
 This repo was set up to analyze the nuclear winter climate model of [Coupe et al. 2019](https://agupubs.onlinelibrary.wiley.com/doi/full/10.1029/2019JD030509) to look at the impact of a nuclear winter on renewable energy production.
 
 ## Codebase orientation
-* `scripts/Explore.ipynb` queries the Coupe et al. montly average data to make some useful figures. 
+* `scripts/Explore.ipynb` queries the Coupe et al. montly average data to make some useful figures. Also a good notebook to explore climate simulation data unrelated to this particular project.
 * `scripts/Solar-Power.ipynb` combines the Coupe et al. data with a database of solar farms to quantify the effect of a nuclear winter on solar power production.
 * `scripts/Wind-Power.ipynb` combines the Coupe et al. data with a database of wind farms to quantify the effect of a nuclear winter on wind power production.
 * `scripts/Maps-2050.ipynb` makes the figures actually used in the paper.

@@ -160,3 +160,5 @@ cython_debug/
 #.idea/
 
 data/nw_ur_150_07_mini
+
+tmp
