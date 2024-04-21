@@ -1,4 +1,4 @@
-name: /home/sblouin/anaconda3/envs/WACCM4-Nuclear-Winter-Analysis
+name: WACCM4-Nuclear-Winter-Analysis
 channels:
   - conda-forge
   - defaults

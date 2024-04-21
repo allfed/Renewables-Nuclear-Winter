@@ -1,0 +1,183 @@
+# 'NMONTHS': 120,
+# 'crop_disruption': 'country_nuclear_winter',
+# 'cull': 'do_eat_culled',
+# 'end_simulation_stocks_ratio': 'zero',
+# 'fat': 'not_required',
+# 'fish': 'nuclear_winter',
+# 'grasses': 'country_nuclear_winter',
+# 'intake_constraints': 'enabled',
+# 'meat_strategy': 'feed_only_ruminants',
+# 'nutrition': 'catastrophe',
+# 'protein': 'not_required',
+# 'scale': 'country',
+# 'scenario': 'no_resilient_foods',
+# 'seasonality': 'country',
+# 'shutoff': 'long_delayed_shutoff',
+# 'stored_food': 'baseline',
+# 'waste': 'tripled_prices_in_country'
+#
+country_name,country_code,pct_fed,continent
+Afghanistan,AFG,3.32,Asia
+Albania,ALB,33.16,Europe
+Algeria,DZA,75.58,Africa
+Angola,AGO,24.58,Africa
+Argentina,ARG,450.73,South America
+Armenia,ARM,14.57,Asia
+Australia,AUS,482.08,Oceania
+Azerbaijan,AZE,15.33,Asia
+Bahrain,BHR,3.19,Asia
+Bangladesh,BGD,60.37,Asia
+Barbados,BRB,2.4,North America
+Belarus,BLR,24.59,Europe
+Benin,BEN,65.25,Africa
+Bhutan,BTN,7.98,Asia
+Bolivia,BOL,100.02,South America
+Bosnia and Herz.,BIH,34.39,Europe
+Botswana,BWA,23.66,Africa
+Brazil,BRA,230.46,South America
+Brunei Darussalam,BRN,0.38,Asia
+Burkina Faso,BFA,53.79,Africa
+Myanmar,MMR,26.1,Asia
+Burundi,BDI,13.39,Africa
+Cabo Verde,CPV,2.81,Africa
+Cambodia,KHM,45.44,Asia
+Cameroon,CMR,27.83,Africa
+Canada,CAN,77.32,North America
+Central African Rep.,CAF,29.6,Africa
+Chad,TCD,54.22,Africa
+Chile,CHL,68.8,South America
+China,CHN,37.16,Asia
+Colombia,COL,45.61,South America
+Dem. Rep. Congo,COD,22.56,Africa
+Congo,COG,17.99,Africa
+Costa Rica,CRI,182.99,North America
+Côte d'Ivoire,CIV,38.48,Africa
+Cuba,CUB,37.97,North America
+Djibouti,DJI,3.52,Africa
+Dominican Rep.,DOM,81.11,North America
+Ecuador,ECU,62.09,South America
+Egypt,EGY,45.93,Africa
+El Salvador,SLV,47.33,North America
+Eritrea,ERI,31.59,Africa
+eSwatini,SWT,100.08,Africa
+Ethiopia,ETH,31.79,Africa
+Fiji,FJI,5.16,Oceania
+Gabon,GAB,19.01,Africa
+Gambia,GMB,47.16,Africa
+Georgia,GEO,10.56,Asia
+Ghana,GHA,80.55,Africa
+Guatemala,GTM,83.07,North America
+Guinea,GIN,63.15,Africa
+Guinea-Bissau,GNB,56.2,Africa
+Guyana,GUY,255.94,South America
+Haiti,HTI,60.4,North America
+Honduras,HND,56.19,North America
+India,IND,65.83,Asia
+Indonesia,IDN,100.22,Asia
+Iran,IRN,34.18,Asia
+Iraq,IRQ,23.58,Asia
+Israel,ISR,28.24,Asia
+Jamaica,JAM,50.4,North America
+Japan,JPN,10.97,Asia
+Jordan,JOR,11.08,Asia
+Kazakhstan,KAZ,56.42,Asia
+Kenya,KEN,29.07,Africa
+South Korea,KOR,6.14,Asia
+North Korea,PRK,9.44,Asia
+Kuwait,KWT,4.71,Asia
+Kyrgyzstan,KGZ,12.15,Asia
+Laos,LAO,32.88,Asia
+Lebanon,LBN,16.77,Asia
+Lesotho,LSO,10.21,Africa
+Liberia,LBR,17.22,Africa
+Libya,LBY,59.9,Africa
+Madagascar,MDG,32.99,Africa
+Malawi,MWI,65.22,Africa
+Malaysia,MYS,109.8,Asia
+Mali,MLI,85.92,Africa
+Mauritania,MRT,58.76,Africa
+Mauritius,MUS,2.64,Africa
+Mexico,MEX,32.35,North America
+Moldova,MDA,37.99,Europe
+Mongolia,MNG,10.78,Asia
+Morocco,MAR,63.81,Africa
+Mozambique,MOZ,33.97,Africa
+Namibia,NAM,34.76,Africa
+Nepal,NPL,18.41,Asia
+New Zealand,NZL,414.35,Oceania
+Nicaragua,NIC,78.68,North America
+Niger,NER,36.07,Africa
+Nigeria,NGA,40.12,Africa
+North Macedonia,MKD,15.72,Europe
+Norway,NOR,49.01,Europe
+Oman,OMN,38.04,Asia
+Pakistan,PAK,43.18,Asia
+Panama,PAN,111.23,North America
+Papua New Guinea,PNG,3.53,Oceania
+Paraguay,PRY,341.84,South America
+Peru,PER,50.44,South America
+Philippines,PHL,68.23,Asia
+Qatar,QAT,2.82,Asia
+Russia,RUS,26.12,Asia
+Rwanda,RWA,22.21,Africa
+Saudi Arabia,SAU,44.63,Asia
+Senegal,SEN,108.46,Africa
+Serbia,SRB,70.69,Europe
+Sierra Leone,SLE,37.37,Africa
+Singapore,SGP,1.53,Asia
+Somalia,SOM,18.93,Africa
+South Africa,ZAF,29.65,Africa
+S. Sudan,SSD,30.88,Africa
+Sri Lanka,LKA,89.96,Asia
+Sudan,SDN,43.92,Africa
+Suriname,SUR,93.78,South America
+Switzerland,CHE,17.14,Europe
+Syria,SYR,37.28,Asia
+Taiwan,TWN,9.83,Asia
+Tajikistan,TJK,10.26,Asia
+Tanzania,TZA,54.53,Africa
+Thailand,THA,59.79,Asia
+Togo,TGO,56.17,Africa
+Trinidad and Tobago,TTO,1.8,North America
+Tunisia,TUN,86.49,Africa
+Turkey,TUR,32.95,Europe
+Turkmenistan,TKM,24.71,Asia
+Uganda,UGA,24.91,Africa
+Ukraine,UKR,56.64,Europe
+United Arab Emirates,ARE,22.03,Asia
+United States of America,USA,108.35,North America
+Uruguay,URY,301.88,South America
+Uzbekistan,UZB,18.18,Asia
+Venezuela,VEN,40.33,South America
+Vietnam,VNM,40.2,Asia
+Yemen,YEM,9.62,Asia
+Zambia,ZMB,42.69,Africa
+Zimbabwe,ZWE,28.81,Africa
+Austria,AUT,36.88,Europe
+Belgium,BEL,28.48,Europe
+Bulgaria,BGR,25.81,Europe
+Croatia,HRV,31.82,Europe
+Cyprus,CYP,47.66,Europe
+Czechia,CZE,20.5,Europe
+Denmark,DNK,26.76,Europe
+Estonia,EST,19.81,Europe
+Finland,FIN,13.88,Europe
+France,FRA,49.21,Europe
+Germany,DEU,21.75,Europe
+Greece,GRC,48.88,Europe
+Hungary,HUN,26.34,Europe
+Ireland,IRL,128.67,Europe
+Italy,ITA,46.27,Europe
+Latvia,LVA,18.1,Europe
+Lithuania,LTU,20.23,Europe
+Luxembourg,LUX,19.6,Europe
+Malta,MLT,18.68,Europe
+Netherlands,NLD,31.68,Europe
+Poland,POL,23.23,Europe
+Portugal,PRT,46.87,Europe
+Romania,ROU,20.19,Europe
+Slovakia,SVK,21.96,Europe
+Slovenia,SVN,41.39,Europe
+Spain,ESP,84.53,Europe
+Sweden,SWE,16.91,Europe
+United Kingdom,GBR,34.17,Europe
