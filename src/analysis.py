@@ -714,6 +714,7 @@ class waccm:
             lev = toplot.lev.sel(lev=lev, method="nearest")
             print(f"Level: {lev.values} hPa")
             toplot = toplot.sel(lev=lev)
+            print(toplot)
         if isinstance(month, str):
             toplot_cyclic, lon_cyclic = add_cyclic_point(toplot, coord=toplot.lon)
         else:
@@ -738,7 +739,7 @@ class waccm:
             toplot = toplot.sel(lat=slice(-45, -10), lon=slice(110, 160))
         elif region == "south_america":
             toplot = toplot.sel(lat=slice(-60, 20), lon=slice(-90, -30))
-        toplot_cyclic, lon_cyclic = add_cyclic_point(toplot, coord=toplot.lon)
+        toplot_cyclic, lon_cyclic = add_cyclic_point(toplot[0], coord=toplot.lon)
         contour = ax.contourf(
             lon_cyclic,
             toplot.lat,

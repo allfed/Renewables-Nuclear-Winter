@@ -1,0 +1,182 @@
+# 'NMONTHS': 120,
+#  'crop_disruption': 'country_nuclear_winter',
+#  'cull': 'do_eat_culled',
+#  'end_simulation_stocks_ratio': 'no_stored_between_years',
+#  'fat': 'not_required',
+#  'fish': 'nuclear_winter',
+#  'grasses': 'country_nuclear_winter',
+#  'intake_constraints': 'enabled',
+#  'meat_strategy': 'baseline_breeding',
+#  'nutrition': 'catastrophe',
+#  'protein': 'not_required',
+#  'scale': 'country',
+#  'scenario': 'no_resilient_foods',
+#  'seasonality': 'country',
+#  'shutoff': 'continued_after_10_percent_fed',
+#  'stored_food': 'baseline',
+#  'waste': 'baseline_in_country'
+country_name,country_code,pct_fed
+Afghanistan,AFG,0.25
+Albania,ALB,11.09
+Algeria,DZA,13.18
+Angola,AGO,11.03
+Argentina,ARG,35.52
+Armenia,ARM,1.29
+Australia,AUS,289.08
+Azerbaijan,AZE,0.03
+Bahrain,BHR,7.49
+Bangladesh,BGD,12.58
+Barbados,BRB,0.25
+Belarus,BLR,0.07
+Benin,BEN,13.42
+Bhutan,BTN,3.96
+Bolivia (Plurinational State of),BOL,12.47
+Bosnia and Herzegovina,BIH,1.41
+Botswana,BWA,11.01
+Brazil,BRA,21.52
+Brunei Darussalam,BRN,0.96
+Burkina Faso,BFA,33.98
+Myanmar,MMR,15.54
+Burundi,BDI,7.14
+Cabo Verde,CPV,1.97
+Cambodia,KHM,11.3
+Cameroon,CMR,11.22
+Canada,CAN,1.26
+Central African Republic,CAF,13.58
+Chad,TCD,18.13
+Chile,CHL,17.44
+China,CHN,2.32
+Colombia,COL,11.61
+Democratic Republic of the Congo,COD,22.5
+Republic of the Congo,COG,11.97
+Costa Rica,CRI,64.26
+Cote d'Ivoire,CIV,12.67
+Cuba,CUB,12.89
+Djibouti,DJI,0.42
+Dominican Republic,DOM,12.84
+Ecuador,ECU,14.57
+Egypt,EGY,13.7
+El Salvador,SLV,11.28
+Eritrea,ERI,26.27
+Eswatini,SWT,11.77
+Ethiopia,ETH,11.92
+Fiji,FJI,2.33
+Gabon,GAB,11.35
+Gambia,GMB,12.6
+Georgia,GEO,1.61
+Ghana,GHA,12.75
+Guatemala,GTM,13.01
+Guinea,GIN,13.99
+Guinea-Bissau,GNB,26.96
+Guyana,GUY,16.41
+Haiti,HTI,34.41
+Honduras,HND,12.24
+India,IND,34.32
+Indonesia,IDN,12.46
+Iran (Islamic Republic of),IRN,4.71
+Iraq,IRQ,7.2
+Israel,ISR,13.02
+Jamaica,JAM,18.08
+Japan,JPN,3.58
+Jordan,JOR,1.22
+Kazakhstan,KAZ,0.07
+Kenya,KEN,11.71
+Democratic People's Republic of Korea,KOR,0.74
+Republic of Korea,PRK,1.2
+Kuwait,KWT,2.5
+Kyrgyzstan,KGZ,0.02
+Lao People's Democratic Republic,LAO,3.41
+Lebanon,LBN,10.29
+Lesotho,LSO,9.74
+Liberia,LBR,14.91
+Libya,LBY,45.3
+Madagascar,MDG,13.33
+Malawi,MWI,12.93
+Malaysia,MYS,19.89
+Mali,MLI,14.02
+Mauritania,MRT,15.47
+Mauritius,MUS,1.21
+Mexico,MEX,10.76
+Republic of Moldova,MDA,0.2
+Mongolia,MNG,0.0
+Morocco,MAR,13.64
+Mozambique,MOZ,23.03
+Namibia,NAM,16.35
+Nepal,NPL,5.96
+New Zealand,NZL,219.97
+Nicaragua,NIC,18.99
+Niger,NER,15.12
+Nigeria,NGA,12.55
+North Macedonia,MKD,0.04
+Norway,NOR,23.31
+Oman,OMN,11.19
+Pakistan,PAK,17.73
+Panama,PAN,19.89
+Papua New Guinea,PNG,2.57
+Paraguay,PRY,11.8
+Peru,PER,12.29
+Philippines,PHL,16.97
+Qatar,QAT,1.7
+Russian Federation,RUS,2.17
+Rwanda,RWA,18.07
+Saudi Arabia,SAU,12.26
+Senegal,SEN,73.73
+Serbia,SRB,0.04
+Sierra Leone,SLE,29.21
+Singapore,SGP,1.61
+Somalia,SOM,15.4
+South Africa,ZAF,11.63
+South Sudan,SSD,16.46
+Sri Lanka,LKA,51.72
+Sudan,SDN,13.24
+Suriname,SUR,11.51
+Switzerland,CHE,2.7
+Syrian Arab Republic,SYR,21.07
+Taiwan,TWN,0.32
+Tajikistan,TJK,0.02
+United Republic of Tanzania,TZA,34.07
+Thailand,THA,11.03
+Togo,TGO,15.38
+Trinidad and Tobago,TTO,0.36
+Tunisia,TUN,15.3
+Turkiye,TUR,8.07
+Turkmenistan,TKM,0.17
+Uganda,UGA,21.95
+Ukraine,UKR,0.12
+United Arab Emirates,ARE,10.66
+United States of America,USA,15.38
+Uruguay,URY,110.39
+Uzbekistan,UZB,0.16
+Venezuela (Bolivarian Republic of),VEN,11.23
+Viet Nam,VNM,9.27
+Yemen,YEM,7.75
+Zambia,ZMB,14.86
+Zimbabwe,ZWE,18.3
+Austria,AUT,4.08
+Belgium,BEL,0.74
+Bulgaria,BGR,0.29
+Croatia,HRV,2.89
+Cyprus,CYP,11.25
+Czechia,CZE,0.33
+Denmark,DNK,1.11
+Estonia,EST,0.38
+Finland,FIN,1.02
+France,FRA,7.69
+Germany,DEU,1.08
+Greece,GRC,10.7
+Hungary,HUN,0.33
+Ireland,IRL,12.57
+Italy,ITA,8.68
+Latvia,LVA,1.1
+Lithuania,LTU,0.91
+Luxembourg,LUX,0.37
+Malta,MLT,3.62
+Netherlands,NLD,0.54
+Poland,POL,0.47
+Portugal,PRT,10.54
+Romania,ROU,0.26
+Slovakia,SVK,0.27
+Slovenia,SVN,8.89
+Spain,ESP,10.68
+Sweden,SWE,0.63
+United Kingdom of Great Britain and Northern Ireland,GBR,5.33
