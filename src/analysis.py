@@ -663,23 +663,36 @@ class waccm:
         )
         if var == "total_precip":
             return (ds["PRECC"] + ds["PRECL"]) * 1000 * 30 * 24 * 3600
+        if var == "PRECC":
+            return ds[var] * 1000 * 30 * 24 * 3600
+        if var == "PRECL":
+            return ds[var] * 1000 * 30 * 24 * 3600
         return ds[var]
 
     @staticmethod
     def plot_map(
-        var, year, month, lev=None, region="world", vmin=None, vmax=None, save=False
+        var,
+        year,
+        month,
+        lev=None,
+        region="world",
+        vmin=None,
+        vmax=None,
+        nv=16,
+        save=False,
     ):
         """
         Plot data for a given variable, year, and month on a map. Can calculate and plot seasonal averages.
 
         Args:
             var (str): variable name
-            year (int): year
-            month (int or str): month number or season name (DJF, MAM, JJA, SON)
+            year (int or list): year (or years) to plot
+            month (int or str): month number or season name (DJF, MAM, JJA, SON) or "annual"
             lev (float): level to plot (hPa)
             region (str): region to plot
             vmin (float): minimum value for the color scale
             vmax (float): maximum value for the color scale
+            nv (int): number of levels for the color scale
             save (bool): whether to save the plot
         """
         plt.figure()
@@ -688,39 +701,56 @@ class waccm:
             "MAM": [3, 4, 5],
             "JJA": [6, 7, 8],
             "SON": [9, 10, 11],
+            "annual": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
         }
 
         def calculate_seasonal_average(var, year, season):
             """Calculates seasonal average for the given variable, adjusting year for December."""
             months = months_dict[season]
             for m in months:
-                y = year if m != 12 else year - 1  # Adjust year for December
+                if season == "DJF":
+                    y = year if m != 12 else year - 1  # Adjust year for December
+                else:
+                    y = year
                 try:
                     ans = ans + waccm.get(var, y, m).isel(
                         time=0
                     )  # Add data for each month
                 except NameError:
                     ans = waccm.get(var, y, m).isel(time=0)
-            return ans / 3
+            if season == "annual" and (var == "total_precip" or var == "PRECC" or var == "PRECL"):
+                return ans  # Return annual total
+            return ans / len(months)  # Return average
 
-        if isinstance(month, str):  # season
-            toplot = calculate_seasonal_average(var, year, month)
-        else:  # single month
-            toplot = waccm.get(var, year, month)
+        years = year if isinstance(year, list) else [year]
+
+        for year in years:  # Loop over years and average
+            if isinstance(month, str):  # season or annual
+                newdata = calculate_seasonal_average(var, year, month)
+            else:  # single month
+                newdata = waccm.get(var, year, month)
+            try:
+                toplot = toplot + newdata
+            except NameError:
+                toplot = newdata
+        toplot = toplot / len(years)
+
         if var == "T":
             toplot = toplot - 273.15
+
         if lev is not None:
             # find closest level
             lev = toplot.lev.sel(lev=lev, method="nearest")
             print(f"Level: {lev.values} hPa")
             toplot = toplot.sel(lev=lev)
-            print(toplot)
+
         if isinstance(month, str):
             toplot_cyclic, lon_cyclic = add_cyclic_point(toplot, coord=toplot.lon)
         else:
             toplot_cyclic, lon_cyclic = add_cyclic_point(
                 toplot.isel(time=0), coord=toplot.lon
             )
+
         ax = plt.axes(projection=ccrs.PlateCarree())
         ax.coastlines()
         cbar = "viridis"
@@ -730,35 +760,45 @@ class waccm:
             cbar = "BrBG"
         if var == "T":
             cbar = "coolwarm"
+
         # apply region mask
         if region == "europe":
-            toplot = toplot.sel(lat=slice(30, 70), lon=slice(-20, 40))
+            toplot = toplot.sel(lat=slice(30, 70), lon=slice(360 - 20, 40))
         elif region == "north_america":
-            toplot = toplot.sel(lat=slice(20, 60), lon=slice(-140, -60))
+            toplot = toplot.sel(lat=slice(20, 60), lon=slice(360 - 140, 360 - 60))
         elif region == "australia":
-            toplot = toplot.sel(lat=slice(-45, -10), lon=slice(110, 160))
+            toplot = toplot.sel(lat=slice(-45, -10), lon=slice(110, 155))
         elif region == "south_america":
-            toplot = toplot.sel(lat=slice(-60, 20), lon=slice(-90, -30))
-        toplot_cyclic, lon_cyclic = add_cyclic_point(toplot[0], coord=toplot.lon)
+            toplot = toplot.sel(lat=slice(-60, 20), lon=slice(360 - 90, 360 - 30))
+
+        if isinstance(month, str):
+            toplot_cyclic, lon_cyclic = add_cyclic_point(toplot, coord=toplot.lon)
+        else:
+            toplot_cyclic, lon_cyclic = add_cyclic_point(
+                toplot.isel(time=0), coord=toplot.lon
+            )
+
         contour = ax.contourf(
             lon_cyclic,
             toplot.lat,
             toplot_cyclic,
             transform=ccrs.PlateCarree(),
             cmap=cbar,
-            levels=np.linspace(vmin, vmax, 16) if vmin is not None else 21,
+            levels=np.linspace(vmin, vmax, nv) if vmin is not None else 21,
         )
         plt.colorbar(
             contour,
             ax=ax,
             orientation="vertical",
-            label=waccm.label(var),
+            label=waccm.label(var, month),
+            extend="max",
         )
         month_or_season = waccm.month_name(month) if isinstance(month, int) else month
         month_middle = months_dict[month][1] if isinstance(month, str) else month
-        plt.title(
-            f"{month_or_season} of Year {year} ({waccm.months_since_nw(year, month_middle)} months since nuclear war)"
-        )
+        if month != "annual":
+            plt.title(
+                f"{month_or_season} of Year {year} ({waccm.months_since_nw(year, month_middle)} months since nuclear war)"
+            )
         plt.tight_layout()
         if save:
             year = str(year).zfill(2)
@@ -929,12 +969,13 @@ class waccm:
         plt.show()
 
     @staticmethod
-    def label(var, relative=False):
+    def label(var, month, relative=False):
         """
         Get a label for a given variable.
 
         Args:
             var (str): variable name
+            month (int or str): month number or season name (DJF, MAM, JJA, SON) or "annual"
             relative (bool): whether to plot relative difference
 
         Returns:
@@ -1008,11 +1049,17 @@ class waccm:
                 if relative
                 else "Soot effective radius (um)"
             )
-        elif var == "total_precip":
+        elif var == "total_precip" and month != "annual":
             return (
                 "Change in total precipitation rate (%)"
                 if relative
                 else "Precipitation (mm/month)"
+            )
+        elif var == "total_precip" and month == "annual":
+            return (
+                "Change in total precipitation (%)"
+                if relative
+                else "Total precipitation (mm/year)"
             )
         else:
             return var
