@@ -27,33 +27,36 @@ def test_gem_initialization_no_errors():
     assert hasattr(gem, "wind_maxyear")
 
 
-def test_get_solar_flux_time_series():
-    """
-    Test function for the 'get_solar_flux_time_series' function.
-    """
-    lat, lon = 30.0, -90.0
-    time, series, baseline = GEM.get_solar_flux_time_series(lat, lon)
+if os.environ.get('GITHUB_ACTIONS') != 'true': 
+    # Skip the following tests on GitHub Actions due to the large data files
+    # that are required for the tests to run
+    def test_get_solar_flux_time_series():
+        """
+        Test function for the 'get_solar_flux_time_series' function.
+        """
+        lat, lon = 30.0, -90.0
+        time, series, baseline = GEM.get_solar_flux_time_series(lat, lon)
 
-    assert len(time) == 180  # 15 years * 12 months
-    assert len(series) == 180
-    assert len(baseline) == 12
-    assert np.isclose(baseline.sum(), 1.0)  # Check normalization
-    assert np.all(series >= 0)  # Values should be non-negative
+        assert len(time) == 180  # 15 years * 12 months
+        assert len(series) == 180
+        assert len(baseline) == 12
+        assert np.isclose(baseline.sum(), 1.0)  # Check normalization
+        assert np.all(series >= 0)  # Values should be non-negative
 
 
-def test_get_wind_power_time_series():
-    """
-    Test function for the `get_wind_power_time_series` function in the GEM module.
-    """
-    lat, lon = 45.0, 15.0
-    time, series, baseline = GEM.get_wind_power_time_series(lat, lon)
+    def test_get_wind_power_time_series():
+        """
+        Test function for the `get_wind_power_time_series` function in the GEM module.
+        """
+        lat, lon = 45.0, 15.0
+        time, series, baseline = GEM.get_wind_power_time_series(lat, lon)
 
-    assert len(time) == 156  # 13 years * 12 months
-    assert len(series) == 156
-    assert len(baseline) == 12
-    assert np.isclose(baseline.sum(), 1.0)  # Check normalization
-    assert np.all(series >= 0)  # Values should be non-negative
-    assert -180 <= lon <= 180  # Check if longitude is wrapped between -180 and 180
+        assert len(time) == 156  # 13 years * 12 months
+        assert len(series) == 156
+        assert len(baseline) == 12
+        assert np.isclose(baseline.sum(), 1.0)  # Check normalization
+        assert np.all(series >= 0)  # Values should be non-negative
+        assert -180 <= lon <= 180  # Check if longitude is wrapped between -180 and 180
 
 
 # Test Data
