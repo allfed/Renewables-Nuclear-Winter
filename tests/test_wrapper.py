@@ -1,11 +1,16 @@
 import numpy as np
 import os
+from pathlib import Path
 import pytest
 import xarray as xr
 
 import sys
 
-sys.path.append("../src")
+repo_root = Path(__file__).parent.parent
+src_dir = repo_root / "src"
+data_dir = repo_root / "data"
+sys.path.append(str(src_dir))
+
 from analysis import GEM, waccmwind
 
 
@@ -52,7 +57,7 @@ def test_get_wind_power_time_series():
 
 
 # Test Data
-TEST_DATA_DIR = "../data/wind-data"  # Replace with your actual test data directory
+TEST_DATA_DIR = f"{data_dir}/wind-data"  # Replace with your actual test data directory
 TEST_YEARS = [1, 5]  # Example years to test
 TEST_MONTHS = [1, 6, 12]  # Example months to test
 TEST_SIMS = ["control", "catastrophe"]

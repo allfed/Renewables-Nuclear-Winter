@@ -10,6 +10,7 @@ import geopandas as gpd
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from pathlib import Path
 import tqdm
 import xarray as xr
 import geopy
@@ -20,6 +21,10 @@ plt.style.use(
     "https://raw.githubusercontent.com/allfed/ALLFED-matplotlib-style-sheet/main/ALLFED.mplstyle"
 )
 
+repo_root = Path(__file__).parent.parent
+data_dir = repo_root / "data"
+results_dir = repo_root / "results"
+tmp_dir = repo_root / "tmp"
 
 class GEM:
     def __init__(self):
@@ -40,7 +45,7 @@ class GEM:
         Returns:
             pd.DataFrame: solar farm data
         """
-        file_path = f"../data/global-energy-monitor/Global-{energy.capitalize()}-Power-Tracker-December-2023.xlsx"
+        file_path = f"{data_dir}/global-energy-monitor/Global-{energy.capitalize()}-Power-Tracker-December-2023.xlsx"
         largescale = pd.read_excel(file_path, sheet_name=1)
         mediumscale = pd.read_excel(file_path, sheet_name=2)
         if energy == "solar":
@@ -353,8 +358,8 @@ class GEM:
         Args:
             energy (str): "solar" or "wind"
         """
-        output_csv1 = f"../results/fraction_of_{energy}_power_countries.csv"
-        output_csv2 = f"../results/baseline_seasonality_{energy}_power_countries.csv"
+        output_csv1 = f"{results_dir}/fraction_of_{energy}_power_countries.csv"
+        output_csv2 = f"{results_dir}/baseline_seasonality_{energy}_power_countries.csv"
         gem_df = self.solar_farms if energy == "solar" else self.wind_farms
 
         # Sort countries alphabetically
@@ -517,7 +522,7 @@ class GEM:
                     new_df = pd.concat([new_df, new_row], ignore_index=True)
                     year_total = 0
                     iyear += 1
-        new_df.to_csv(f"../results/aggregate_yearly_{energy}_power.csv", index=False)
+        new_df.to_csv(f"{results_dir}/aggregate_yearly_{energy}_power.csv", index=False)
         setattr(self, f"{energy}_yearly", new_df)
         return
 
@@ -621,12 +626,12 @@ class GEM:
             ax.grid(False)
             plt.title(f"Year {year} after nuclear war")
 
-            plt.savefig(f"../results/{energy}_reduction_map_{year:02}.pdf", dpi=300)
+            plt.savefig(f"{results_dir}/{energy}_reduction_map_{year:02}.pdf", dpi=300)
 
         os.system(
-            f"pdfunite ../results/{energy}_reduction_map_*.pdf ../results/{energy}_reduction_map.pdf"
+            f"pdfunite {results_dir}/{energy}_reduction_map_*.pdf {results_dir}/{energy}_reduction_map.pdf"
         )
-        os.system(f"rm ../results/{energy}_reduction_map_*.pdf")
+        os.system(f"rm {results_dir}/{energy}_reduction_map_*.pdf")
 
 
 class waccm:
@@ -658,7 +663,7 @@ class waccm:
         year = str(year).zfill(4)
         month = str(month).zfill(2)
         ds = xr.open_dataset(
-            f"../data/nw_ur_150_07_mini/nw_ur_150_07.cam.h0.{year}-{month}.nc",
+            f"{data_dir}/nw_ur_150_07_mini/nw_ur_150_07.cam.h0.{year}-{month}.nc",
             chunks={} if use_dask else None,  # Use Dask for chunking if requested
         )
         if var == "total_precip":
@@ -802,7 +807,7 @@ class waccm:
         plt.tight_layout()
         if save:
             year = str(year).zfill(2)
-            plt.savefig(f"../tmp/{var}_{year}_{month}.pdf")
+            plt.savefig(f"{tmp_dir}/{var}_{year}_{month}.pdf")
 
     @staticmethod
     def plot_map_diff(var, year, month, year_base=16, relative=False, lev=None):
@@ -1209,7 +1214,7 @@ class waccmwind:
             xr.Dataset: wind data
         """
         year = year + 4
-        filepath = f"../data/wind-data/{var}_{sim}_{year:02}.nc"
+        filepath = f"{data_dir}/wind-data/{var}_{sim}_{year:02}.nc"
         ds = xr.open_dataset(filepath)
         return ds.sel(time=f"{year:04}-{month:02}").isel(time=0)
 
