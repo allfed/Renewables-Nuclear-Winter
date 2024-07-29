@@ -268,4 +268,3 @@ dependencies:
       - snuggs==1.4.7
       - tqdm==4.66.2
       - widgetsnbextension==4.0.10
-prefix: /home/simon/miniforge3/envs/WACCM4-Nuclear-Winter-Analysis
