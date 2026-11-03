@@ -24,15 +24,15 @@ In addition to the Coupe et al. data, the `data` directory now contains a databa
 
 ## Data
 
-Large inputs listed below are not in this repository. Where the ALLFED shared store is available, they live once in it (`~/ALLFED/shared-data`, `~/ALLFED/shared-models`), read-only, each version with a `SOURCE.md` (origin, licence, checksums). This repository reaches them through links that are git-ignored and made by `scripts/link_shared.sh` from the list in `data/shared.tsv`:
+Large inputs listed below are not in this repository. They live in the ALLFED shared store: one read-only copy of each dataset or model, with a `SOURCE.md` (origin, licence, checksums, how to restore it). The store is the folder that holds `shared-data/` and `shared-models/`; by default it is the folder that contains this repository (for example `~/ALLFED`), and `ALLFED_STORE=/path` points elsewhere. This repository reaches the store through git-ignored links listed in `data/shared.tsv`:
 
-    scripts/link_shared.sh            # makes the links; prints MISSING (with where to get it) for anything not found
+    scripts/link_shared.sh            # makes the links; prints MISSING (and where to get it) for anything not found
     scripts/link_shared.sh --check    # reports only, changes nothing
 
-The store is the folder that holds `shared-data/` and `shared-models/`, by default the folder that contains this repository. Set `ALLFED_STORE=/path` if it is elsewhere. Without the store, download each input and put it (or a link to it) at the path in the first column.
+Without the store, download each input from the source in the table and put it (or a link to it) at the path in the first column. Status: CURRENT = use for new work; INPUT = raw source that other datasets are built from; LEGACY = kept only to reproduce earlier results.
 
-| Path in this repo | Store version | What | Where to get it | Size |
-|---|---|---|---|---|
-| `data/nw_ur_150_07_mini` | `shared-data/waccm-nw_ur_150_07-h0/2019-02-20` | WACCM4 150 Tg run nw_ur_150_07, monthly cam.h0 (192 files) | Coupe et al. 2019 run output (ask ALLFED) | 4.3 GB |
+| Path in this repo | Store item | Status | What | Where to get it | Size |
+|---|---|---|---|---|---|
+| `data/nw_ur_150_07_mini` | `shared-data/waccm-150tg-h0` | INPUT | WACCM4 run nw_ur_150_07, monthly cam.h0 output, 192 files (years 5-20) | WACCM4 run nw_ur_150_07 (Coupe et al. 2019); not public, ask the ALLFED team | 4.3 GB |
 
-The links sit at the paths the code already reads, so no code changed. Moved on 2026-11-03. `data/wind-data` stays tracked in this repository.
+The links sit at the paths the code already reads, so no code changed when the data moved to the store (2026-11-03). `data/wind-data` stays tracked in this repository.
