@@ -26,6 +26,7 @@ data_dir = repo_root / "data"
 results_dir = repo_root / "results"
 tmp_dir = repo_root / "tmp"
 
+
 class GEM:
     def __init__(self):
         self.solar_farms = self.load_farms(energy="solar")
@@ -723,7 +724,9 @@ class waccm:
                     )  # Add data for each month
                 except NameError:
                     ans = waccm.get(var, y, m).isel(time=0)
-            if season == "annual" and (var == "total_precip" or var == "PRECC" or var == "PRECL"):
+            if season == "annual" and (
+                var == "total_precip" or var == "PRECC" or var == "PRECL"
+            ):
                 return ans  # Return annual total
             return ans / len(months)  # Return average
 
@@ -810,35 +813,83 @@ class waccm:
             plt.savefig(f"{tmp_dir}/{var}_{year}_{month}.pdf")
 
     @staticmethod
-    def plot_map_diff(var, year, month, year_base=16, relative=False, lev=None):
+    def plot_map_diff(
+        var, year, month, year_base=16, relative=False, lev=None, region="world"
+    ):
         """
         Plot difference in data for a given variable, year, and month on a map.
 
         Args:
             var (str): variable name
             year (int): year
-            month (int): month
+            month (int or str): month number or season name (DJF, MAM, JJA, SON) or "annual"
             year_base (int): base year for comparison, the default is 16, which
                 corresponds to the end year of the simulation when things more or
                 less return to normal
             relative (bool): whether to plot relative difference
             lev (float): level to plot (hPa)
+            region (str): region to plot ("world", "europe", "north_america", "australia", "south_america")
         """
-        month_base = month
-        data_current = waccm.get(var, year, month).isel(time=0).load()
-        data_base = waccm.get(var, year_base, month_base).isel(time=0).load()
+        months_dict = {
+            "DJF": [12, 1, 2],
+            "MAM": [3, 4, 5],
+            "JJA": [6, 7, 8],
+            "SON": [9, 10, 11],
+            "annual": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+        }
+
+        def calculate_seasonal_average(var, year, season, is_base=False):
+            """Calculates seasonal average for the given variable, adjusting year for December."""
+            months = months_dict[season]
+            for m in months:
+                if season == "DJF":
+                    y = year if m != 12 else (year - 1)  # Adjust year for December
+                else:
+                    y = year
+                try:
+                    ans = ans + waccm.get(var, y, m).isel(
+                        time=0
+                    )  # Add data for each month
+                except NameError:
+                    ans = waccm.get(var, y, m).isel(time=0)
+            if season == "annual" and (
+                var == "total_precip" or var == "PRECC" or var == "PRECL"
+            ):
+                return ans  # Return annual total
+            return ans / len(months)  # Return average
+
+        # Handle seasonal or monthly data
+        if isinstance(month, str):  # season or annual
+            data_current = calculate_seasonal_average(var, year, month)
+            data_base = calculate_seasonal_average(var, year_base, month, is_base=True)
+        else:  # single month
+            data_current = waccm.get(var, year, month).isel(time=0).load()
+            data_base = waccm.get(var, year_base, month).isel(time=0).load()
+
         if lev is not None:
             # find closest level
             lev = data_current.lev.sel(lev=lev, method="nearest")
             print(f"Level: {lev.values} hPa")
             data_current = data_current.sel(lev=lev)
             data_base = data_base.sel(lev=lev)
+
         if relative:
             toplot = 100 * (data_current - data_base) / data_base
             cmap = "PuOr_r"
         else:
             toplot = data_current - data_base
             cmap = "viridis"
+
+        # apply region mask
+        if region == "europe":
+            toplot = toplot.sel(lat=slice(30, 70), lon=slice(360 - 20, 40))
+        elif region == "north_america":
+            toplot = toplot.sel(lat=slice(20, 60), lon=slice(360 - 140, 360 - 60))
+        elif region == "australia":
+            toplot = toplot.sel(lat=slice(-45, -10), lon=slice(110, 155))
+        elif region == "south_america":
+            toplot = toplot.sel(lat=slice(-60, 20), lon=slice(360 - 90, 360 - 30))
+
         toplot_cyclic, lon_cyclic = add_cyclic_point(toplot, coord=toplot.lon)
         ax = plt.axes(projection=ccrs.PlateCarree())
         ax.coastlines()
@@ -858,11 +909,26 @@ class waccm:
             contour,
             ax=ax,
             orientation="vertical",
-            label=waccm.label(var, relative=relative),
+            label=waccm.label(var, month, relative=relative),
         )
-        plt.title(
-            f"{waccm.month_name(month)} of Year {year} ({waccm.months_since_nw(year, month)} months since nuclear war)"
-        )
+
+        # Update title based on whether it's a season or month
+        if isinstance(month, str):
+            title = f"{month} of Year {year}"
+        else:
+            title = f"{waccm.month_name(month)} of Year {year}"
+
+        if (
+            waccm.months_since_nw(
+                year, month if isinstance(month, int) else months_dict[month][1]
+            )
+            < 0
+        ):
+            title += f" ({-waccm.months_since_nw(year, month if isinstance(month, int) else months_dict[month][1])} months before nuclear war)"
+        else:
+            title += f" ({waccm.months_since_nw(year, month if isinstance(month, int) else months_dict[month][1])} months since nuclear war)"
+
+        plt.title(title)
         plt.tight_layout()
         plt.show()
 
@@ -974,7 +1040,7 @@ class waccm:
         plt.show()
 
     @staticmethod
-    def label(var, month, relative=False):
+    def label(var, month=None, relative=False):
         """
         Get a label for a given variable.
 
@@ -1219,7 +1285,16 @@ class waccmwind:
         return ds.sel(time=f"{year:04}-{month:02}").isel(time=0)
 
     @staticmethod
-    def plot_map(year, month, sim, zmin=None, zmax=None, var="windpower"):
+    def plot_map(
+        year,
+        month,
+        sim,
+        zmin=None,
+        zmax=None,
+        var="windpower",
+        return_ocean_mean=True,
+        dontshow=True,
+    ):
         """
         Plot wind data for a given year and month on a map.
 
@@ -1230,6 +1305,8 @@ class waccmwind:
             zmin (float): minimum value for the color scale
             zmax (float): maximum value for the color scale
             var (str): variable name ("windpower" or "windspeed")
+            return_ocean_mean (bool): whether to return the mean wind power over the ocean
+            dontshow (bool): whether to not show the plot
         """
         data = waccmwind.get(year, month, sim, var=var)
         if data is not None:
@@ -1244,6 +1321,109 @@ class waccmwind:
             elif var == "windspeed":
                 z = data.windspeed
                 label = "Wind speed (m/s)"
+
+            # Calculate global, land, and ocean averages with proper area weighting
+            # Earth's radius in meters
+            R = 6371000
+
+            # Create grid of all lat/lon points
+            lons, lats = np.meshgrid(data.a2x3h_nx.values, data.a2x3h_ny.values)
+
+            # Create land mask using Natural Earth dataset
+            land = gpd.read_file(gpd.datasets.get_path("naturalearth_lowres"))
+            from shapely.prepared import prep
+
+            land_geom = prep(land.unary_union)
+
+            def fix_lon_and_make_point(lon, lat):
+                if lon > 180:
+                    lon -= 360
+                return Point(lon, lat)
+
+            # Check which points are on land
+            points = [
+                fix_lon_and_make_point(lon, lat)
+                for lon, lat in zip(lons.flatten(), lats.flatten())
+            ]
+            in_land = [land_geom.contains(pt) for pt in points]
+            land_mask = np.array(in_land).reshape(lons.shape)
+            ocean_mask = ~land_mask
+
+            # Calculate cell areas using the correct spherical geometry formula
+            # We need to calculate the area of each cell properly
+            cell_area = np.zeros_like(lons)
+            for i in range(len(lats)):
+                for j in range(len(lons[0])):
+                    # Get latitude bounds (cell edges)
+                    if i == 0:
+                        lat1 = -90 if i == 0 else (lats[i - 1, j] + lats[i, j]) / 2
+                    else:
+                        lat1 = (lats[i - 1, j] + lats[i, j]) / 2
+
+                    if i == len(lats) - 1:
+                        lat2 = (
+                            90
+                            if i == len(lats) - 1
+                            else (lats[i, j] + lats[i + 1, j]) / 2
+                        )
+                    else:
+                        lat2 = (lats[i, j] + lats[i + 1, j]) / 2
+
+                    # Get longitude bounds (cell edges)
+                    if j == 0:
+                        lon1 = lons[i, j] - (lons[i, j + 1] - lons[i, j]) / 2
+                    else:
+                        lon1 = (lons[i, j - 1] + lons[i, j]) / 2
+
+                    if j == len(lons[0]) - 1:
+                        lon2 = lons[i, j] + (lons[i, j] - lons[i, j - 1]) / 2
+                    else:
+                        lon2 = (lons[i, j] + lons[i, j + 1]) / 2
+
+                    # Convert to radians
+                    lat1_rad = np.deg2rad(lat1)
+                    lat2_rad = np.deg2rad(lat2)
+                    lon1_rad = np.deg2rad(lon1)
+                    lon2_rad = np.deg2rad(lon2)
+
+                    # Calculate area using the correct formula for area on a sphere
+                    cell_area[i, j] = (
+                        R**2
+                        * abs(np.sin(lat2_rad) - np.sin(lat1_rad))
+                        * abs(lon2_rad - lon1_rad)
+                    )
+
+            # Print diagnostics about total land/ocean area
+            total_cell_area = np.sum(cell_area)
+            total_land_area = np.sum(cell_area * land_mask)
+            total_ocean_area = np.sum(cell_area * ocean_mask)
+
+            # Calculate weighted averages using the correct cell areas
+            global_sum = np.nansum(z.values * cell_area)
+            global_area = np.nansum(cell_area * ~np.isnan(z.values))
+            global_avg = global_sum / global_area if global_area > 0 else np.nan
+
+            land_sum = np.nansum(z.values * cell_area * land_mask)
+            land_area = np.nansum(cell_area * land_mask * ~np.isnan(z.values))
+            land_avg = land_sum / land_area if land_area > 0 else np.nan
+
+            ocean_sum = np.nansum(z.values * cell_area * ocean_mask)
+            ocean_area = np.nansum(cell_area * ocean_mask * ~np.isnan(z.values))
+            ocean_avg = ocean_sum / ocean_area if ocean_area > 0 else np.nan
+
+            # Display the averages on the plot
+            avg_text = (
+                f"Global avg: {global_avg:.2f}\n"
+                f"Land avg: {land_avg:.2f}\n"
+                f"Ocean avg: {ocean_avg:.2f}"
+            )
+            ax.text(
+                0.02,
+                0.02,
+                avg_text,
+                transform=ax.transAxes,
+                bbox=dict(facecolor="white", alpha=0.7),
+            )
 
             cf = ax.pcolormesh(
                 data.a2x3h_nx,
@@ -1280,7 +1460,11 @@ class waccmwind:
             )
 
             plt.tight_layout()
-            plt.show()
+            if not dontshow:
+                plt.show()
+
+            if return_ocean_mean:
+                return ocean_avg
 
 
 def get_bounding_polygon(bbox):
