@@ -21,3 +21,18 @@ This repo was set up to analyze the nuclear winter climate model of [Coupe et al
 In addition to the Coupe et al. data, the `data` directory now contains a database of solar farms and wind farms, downloaded from `https://globalenergymonitor.org/`. The data contained in `data/wind-data` has been calculated in the `Climate-Data-Importing` repo. It consists of wind speed data and wind power data. Both data sets are averaged monthly from data with a 3-hour resolution. Wind power is calculated by passing the 3-hour resolution wind speed data through a typical wind turbine speed-power response function. Unlike solar power (which responds linearly to solar flux), wind power must be pre-processed at a higher time resolution because of the non-linear response to wind speed.
 
 `pct_fed_intmodel_simpleadaptations_rationing_humans.txt` contains data on the fraction of people fed in each country based on the example shown in Figure 2 of the integrated model paper ([version 3](https://docs.google.com/document/d/1EyUinpkLkMwVa3Ve-q1igVT8jqj_vcps-8bxQQYM1Ak/edit)).
+
+## Data
+
+Large inputs listed below are not in this repository. Where the ALLFED shared store is available, they live once in it (`~/ALLFED/shared-data`, `~/ALLFED/shared-models`), read-only, each version with a `SOURCE.md` (origin, licence, checksums). This repository reaches them through links that are git-ignored and made by `scripts/link_shared.sh` from the list in `data/shared.tsv`:
+
+    scripts/link_shared.sh            # makes the links; prints MISSING (with where to get it) for anything not found
+    scripts/link_shared.sh --check    # reports only, changes nothing
+
+The store is the folder that holds `shared-data/` and `shared-models/`, by default the folder that contains this repository. Set `ALLFED_STORE=/path` if it is elsewhere. Without the store, download each input and put it (or a link to it) at the path in the first column.
+
+| Path in this repo | Store version | What | Where to get it | Size |
+|---|---|---|---|---|
+| `data/nw_ur_150_07_mini` | `shared-data/waccm-nw_ur_150_07-h0/2019-02-20` | WACCM4 150 Tg run nw_ur_150_07, monthly cam.h0 (192 files) | Coupe et al. 2019 run output (ask ALLFED) | 4.3 GB |
+
+The links sit at the paths the code already reads, so no code changed. Moved on 2026-11-03. `data/wind-data` stays tracked in this repository.
